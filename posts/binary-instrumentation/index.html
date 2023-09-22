@@ -1,0 +1,1746 @@
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Language" content="en">
+
+    
+    <meta name="description" content="Dynamic Binary Instrumentation (DBI) is a method of analyzing the behavior of a binary application at runtime through the injection of instrumentation code - Uninformed 2007
+Introduction The purpose of this post is to document my dive into the &ldquo;world&rdquo; of Dynamic Binary Instrumentation. I&rsquo;ll cover some of the most well known and used DBI frameworks. That is Pin, DynamoRIO, and Frida. From these three I&rsquo;ll mainly focus on Pin. There are other DBI frameworks that I won&rsquo;t touch at all, like Valgrind, Triton (uses Pin), QDBI, BAP, Dyninst, plus many others.">
+    <meta name="keywords" content="homepage, blog, reversing, binary exploitation, kernel, hypervisor, containers">
+
+    <meta name="twitter:card" content="summary"/>
+<meta name="twitter:title" content="Dynamic Binary Instrumentation Primer"/>
+<meta name="twitter:description" content="Dynamic Binary Instrumentation (DBI) is a method of analyzing the behavior of a binary application at runtime through the injection of instrumentation code - Uninformed 2007
+Introduction The purpose of this post is to document my dive into the &ldquo;world&rdquo; of Dynamic Binary Instrumentation. I&rsquo;ll cover some of the most well known and used DBI frameworks. That is Pin, DynamoRIO, and Frida. From these three I&rsquo;ll mainly focus on Pin. There are other DBI frameworks that I won&rsquo;t touch at all, like Valgrind, Triton (uses Pin), QDBI, BAP, Dyninst, plus many others."/>
+
+    <meta property="og:title" content="Dynamic Binary Instrumentation Primer" />
+<meta property="og:description" content="Dynamic Binary Instrumentation (DBI) is a method of analyzing the behavior of a binary application at runtime through the injection of instrumentation code - Uninformed 2007
+Introduction The purpose of this post is to document my dive into the &ldquo;world&rdquo; of Dynamic Binary Instrumentation. I&rsquo;ll cover some of the most well known and used DBI frameworks. That is Pin, DynamoRIO, and Frida. From these three I&rsquo;ll mainly focus on Pin. There are other DBI frameworks that I won&rsquo;t touch at all, like Valgrind, Triton (uses Pin), QDBI, BAP, Dyninst, plus many others." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="http://deniable.org/posts/binary-instrumentation/" />
+<meta property="article:published_time" content="2018-07-25T14:11:32+01:00" />
+<meta property="article:modified_time" content="2018-07-25T14:11:32+01:00" /><meta property="og:site_name" content="shut up and hack" />
+
+
+    <title>
+  Dynamic Binary Instrumentation Primer · shut up and hack
+</title>
+
+    
+      <link rel="canonical" href="http://deniable.org/posts/binary-instrumentation/">
+    
+
+    <link rel="preconnect" href="https://fonts.gstatic.com">
+    <link href="https://fonts.googleapis.com/css?family=Lato:400,700%7CMerriweather:300,700%7CSource+Code+Pro:400,700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fork-awesome@1.1.7/css/fork-awesome.min.css"
+      integrity="sha256-gsmEoJAws/Kd3CjuOQzLie5Q3yshhvmo7YNtBG7aaEY=" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/normalize.css@8/normalize.min.css">
+    
+      
+      
+      <link rel="stylesheet" href="/css/coder.min.15d3dcd7d56ff7df8a54a0659da83058d38fb1814fa8dad387efc92034b70def.css" integrity="sha256-FdPc19Vv99&#43;KVKBlnagwWNOPsYFPqNrTh&#43;/JIDS3De8=" crossorigin="anonymous" media="screen" />
+    
+
+    
+
+    
+      
+        
+        
+        <link rel="stylesheet" href="/css/coder-dark.min.126ad3988d46bdae6217a11105b53c9662bca05f39d42d3c0fb366919d334620.css" integrity="sha256-EmrTmI1Gva5iF6ERBbU8lmK8oF851C08D7NmkZ0zRiA=" crossorigin="anonymous" media="screen" />
+      
+    
+
+    
+
+    
+
+    <link rel="icon" type="image/png" href="/images/favicon-32x32.png" sizes="32x32">
+    <link rel="icon" type="image/png" href="/images/favicon-16x16.png" sizes="16x16">
+
+    <link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon.png">
+
+    
+
+    <meta name="generator" content="Hugo 0.74.3" />
+  </head>
+
+  
+  
+    
+  
+  <body class="colorscheme-dark"
+        onload=""
+  >
+    
+<div class="float-container">
+    <a id="dark-mode-toggle" class="colorscheme-toggle">
+        <i class="fa fa-adjust fa-fw" aria-hidden="true"></i>
+    </a>
+</div>
+
+
+    <main class="wrapper">
+      <nav class="navigation">
+  <section class="container">
+    <a class="navigation-title" href="/">
+      shut up and hack
+    </a>
+    
+      <input type="checkbox" id="menu-toggle" />
+      <label class="menu-button float-right" for="menu-toggle">
+        <i class="fa fa-bars fa-fw" aria-hidden="true"></i>
+      </label>
+      <ul class="navigation-list">
+        
+          
+            <li class="navigation-item">
+              <a class="navigation-link" href="/posts/">Blog</a>
+            </li>
+          
+            <li class="navigation-item">
+              <a class="navigation-link" href="/projects">Projects</a>
+            </li>
+          
+            <li class="navigation-item">
+              <a class="navigation-link" href="/about">About</a>
+            </li>
+          
+        
+        
+      </ul>
+    
+  </section>
+</nav>
+
+
+      <div class="content">
+        
+  <section class="container post">
+    <article>
+      <header>
+        <div class="post-title">
+          <h1 class="title">Dynamic Binary Instrumentation Primer</h1>
+        </div>
+        <div class="post-meta">
+          <div class="date">
+            <span class="posted-on">
+              <i class="fa fa-calendar" aria-hidden="true"></i>
+              <time datetime='2018-07-25T14:11:32&#43;01:00'>
+                July 25, 2018
+              </time>
+            </span>
+            <span class="reading-time">
+              <i class="fa fa-clock-o" aria-hidden="true"></i>
+              64-minute read
+            </span>
+          </div>
+          
+          
+          
+        </div>
+      </header>
+
+      <div>
+        
+        <p><em><code>Dynamic Binary Instrumentation</code> (<code>DBI</code>) is a method of analyzing the behavior of a binary application at runtime through the injection of instrumentation code</em> - Uninformed 2007</p>
+<h2 id="introduction">Introduction</h2>
+<p>The purpose of this post is to document my dive into the &ldquo;world&rdquo; of <code>Dynamic Binary Instrumentation</code>. I&rsquo;ll cover some of the most well known and used <code>DBI</code> frameworks. That is <a href="https://software.intel.com/en-us/articles/pin-a-dynamic-binary-instrumentation-tool">Pin</a>, <a href="http://www.dynamorio.org/">DynamoRIO</a>, and <a href="https://www.frida.re/">Frida</a>. From these three I&rsquo;ll mainly focus on <code>Pin</code>. There are other <code>DBI</code> frameworks that I won&rsquo;t touch at all, like <a href="http://valgrind.org/">Valgrind</a>, <a href="https://triton.quarkslab.com/">Triton</a> (uses <code>Pin</code>), <a href="https://qbdi.quarkslab.com/">QDBI</a>, <a href="http://binaryanalysisplatform.github.io">BAP</a>, <a href="https://dyninst.org/">Dyninst</a>, plus many others. You might want to have a look at them. Some are more mature, some are less mature. Some have more features, some have fewer features. You&rsquo;ll have to do some research yourself and see which ones fit your needs. Even though <a href="http://valgrind.org/">Valgrind</a> is one of the most widely known, and used <code>DBI</code> frameworks, it&rsquo;s only available for <code>Linux</code>. So, I won&rsquo;t touch it at all.</p>
+<p>In my vulnerability hunting adventures I&rsquo;ve been focused on <code>Windows</code>, and in fact, if you want to take the code I&rsquo;ll present here and build it on <code>Linux</code> it should be pretty straightforward. While the opposite wouldn&rsquo;t be true. The reason being is that building <a href="https://software.intel.com/en-us/articles/pin-a-dynamic-binary-instrumentation-tool">Pin</a> or <a href="http://www.dynamorio.org/">DynamoRIO</a> on <code>Windows</code> can be a bit frustrating. Especially if you aren&rsquo;t motivated to do so.</p>
+<p>I&rsquo;m not an expert in this area (<code>DBI</code>), however since the beginning of the year that I&rsquo;ve been doing some experiments around <code>Fuzzing</code>, and I&rsquo;ve read a lot about the subject. Hence, I&rsquo;ll try to document some of what I learned for future reference. Possibly you&rsquo;ll also find it useful. Note that my goal was to write a reference and not a tutorial.</p>
+<p>The funny part is that I actually thought about doing &ldquo;something&rdquo; with <a href="https://software.intel.com/en-us/articles/pin-a-dynamic-binary-instrumentation-tool">Pin</a>, or <a href="http://www.dynamorio.org/">DynamoRIO</a>, while trying to do some browser <a href="https://en.wikipedia.org/wiki/Heap_spraying">Heap Spraying</a>. Basically, I wanted to monitor the memory allocations my code was producing. While I could do it inside a <code>debugger</code> I thought, &ldquo;<em>why not use a DBI framework? Maybe I can learn something</em>&rdquo;. After all, debuggers are slow. Until today, I&rsquo;m still unsure if I prefer to use <code>WinDbg</code> or <code>Pin</code> for this anyway.</p>
+<h3 id="instrumentation">Instrumentation</h3>
+<p>According to <a href="https://en.wikipedia.org/wiki/Instrumentation_(computer_programming)">Wikipedia</a>, <code>instrumentation</code> <em>refers to an ability to monitor or measure the level of a product&rsquo;s performance, to diagnose errors and to write trace information. Programmers implement instrumentation in the form of code instructions that monitor specific components in a system (&hellip;). When an application contains instrumentation code, it can be managed using a management tool. Instrumentation is necessary to review the performance of the application. Instrumentation approaches can be of two types: Source instrumentation and binary instrumentation.</em></p>
+<p>As stated above, there are two types of instrumentation. <code>Source instrumentation</code>, which is not possible if you don&rsquo;t have the source code of the software application. And <code>binary instrumentation</code>, which can be used with any software application assuming we can execute it. It turns out that most of the programs you run on a <code>Windows</code> operating system are closed source. Which means, in this post, I&rsquo;ll be &ldquo;talking&rdquo; only about <code>binary instrumentation</code>. Often called <code>Dynamic Binary Instrumentation</code>, or <code>Dynamic Binary Modification</code>. Because words take too long, usually people use the acronym <code>DBI</code>, as I already did above.</p>
+<p>In a one-line statement, <code>Dynamic Binary Instrumentation</code> is a technique that involves injecting <code>instrumentation</code> code into a running process. The <code>instrumentation code</code> will be entirely transparent to the application that it&rsquo;s been injected to.</p>
+<p>With a <code>DBI</code> framework, we can analyze the target binary execution step by step. However, note that the analysis only applies to <strong>executed</strong> code.</p>
+<h3 id="dynamic-program-analysis">Dynamic Program Analysis</h3>
+<p>There are two types of program analysis, <code>static</code>, and <code>dynamic</code>. We perform <code>static analysis</code> without running a computer program. While we perform <code>dynamic analysis</code> when we run a computer program.</p>
+<p>Citing <a href="https://en.wikipedia.org/wiki/Dynamic_program_analysis">Wikipedia</a> again, <em>Dynamic program analysis is the analysis of computer software that is performed by executing programs on a real or virtual processor. For dynamic program analysis to be effective, the target program must be executed with sufficient test inputs to produce interesting behavior. Use of software testing measures such as code coverage helps ensure that an adequate slice of the program&rsquo;s set of possible behaviors has been observed.</em></p>
+<p>Dynamic binary modification tools, like the frameworks mentioned earlier, introduce a layer between a running program and the underlying operating system. Providing a unique opportunity to inspect and modify user-level program instructions while a program executes.</p>
+<p>These systems are very complex internally. However, all the complexity is masked in an <code>API</code> that allows any user to quickly build a multitude of tools to aid software analysis. And that&rsquo;s what I&rsquo;ll try to show in this <code>post</code>, by sharing some code I wrote while playing with some <code>DBI</code> frameworks.</p>
+<p>There are many reasons for us to observe and modify the runtime behavior of a computer program. Software and/or hardware developers, system engineers, bug hunters, malware analysts, end users, and so on. All of them will have their own reasons. <code>DBI</code> frameworks provide access to every executed user-level instruction. Besides a potentially small runtime and memory overhead, the program will run identically to a native execution.</p>
+<p>You can say that the main advantage of static analysis is that it ensures 100% code coverage. With dynamic analysis, to ensure a high code coverage we&rsquo;ll need to run the program many times, and with different inputs so the analysis takes different code paths. However, in some cases, the software applications are so big that&rsquo;s too costly to perform static analysis. I would say, one complements the other. Even though static analysis is very boring, and dynamic analysis is (very) fun.</p>
+<p>As I mentioned before, <code>DBI</code> frameworks operate directly in binaries/executables. We don&rsquo;t need the source code of the program. We don&rsquo;t need to (re)compile or (re)link the program. Obviously, this is an <strong>major advantage</strong>, as it allows us to analyze proprietary software.</p>
+<p>A dynamic binary system operates at the same time as the &ldquo;guest&rdquo; program executes while performing all the requested/required modifications on the fly. This dynamic approach can also handle programs that generate code dynamically (even though it imposes a big engineering challenge), that is, self-modifying code. If you &ldquo;google&rdquo; a bit you&rsquo;ll actually find multiple cases where <code>DBI</code> frameworks are/were used to analyze malware with self-modifying code. As an example, check <a href="https://www.blackhat.com/docs/eu-17/materials/eu-17-Polino-Hiding-Pins-Artifacts-To-Defeat-Evasive-Malware.pdf">this presentation</a> from last year&rsquo;s blackhat Europe. Or, <a href="http://joxeankoret.com/blog/2012/11/04/a-simple-pin-tool-unpacker-for-the-linux-version-of-skype/">this post</a> about how to unpack <code>Skype</code> with <code>Pin</code>.</p>
+<p><code>DBI</code> frameworks are daily used to solve computer architecture problems, being heavily used in software engineering, program analysis, and <strong>computer security</strong>. Software engineers want to deeply understand the software they develop, analyze its performance, and runtime behavior in a systematic manner. One common use of <code>DBI</code> frameworks is emulating new <code>CPU</code> instructions. Since the dynamic binary system has access to every instruction before executing it, hardware engineers can actually use these systems to test new instructions that are currently unsupported by the hardware. Instead of executing a specific instruction, they can emulate the new instruction behavior. The same approach can be used to replace faulty instructions with the correct emulation of the desired behavior. Anyway, from a computer security perspective, a <code>DBI</code> system can be used for <code>flow analysis</code>, <code>taint analysis</code>, <code>fuzzing</code>, <code>code coverage</code>, <code>test cases generation</code>, <code>reverse engineering</code>, <code>debugging</code>, <code>vulnerability detection</code>, and even crazy things like <code>patching of vulnerabilities</code>, and <code>automated exploit development</code>.</p>
+<p>There are two main ways of using a dynamic binary system. The first, and eventually most common, in computer security at least, is executing a program from start to finish under the control of the dynamic binary system. We use it when we want to achieve full system simulation/emulation because full control and code coverage are desired. The second, we may just want to attach to an already running program (exactly in the same way a <code>debugger</code> can be attached, or detached, from a running program). This option might be useful if we are interested in figuring out what a program is doing in a specific moment.</p>
+<p>Besides, most of the <code>DBI</code> frameworks have three modes of execution. <code>Interpretation mode</code>, <code>probe mode</code>, and <code>JIT mode</code>. The JIT (just-in-time) mode is the most common implementation, and most commonly used mode even when the <code>DBI</code> system supports more than one mode of execution. In JIT mode the original binary/executable is actually never modified or executed. The binary is seen as data, and a modified copy of the binary is generated in a new memory area (but only for the executed parts of the binary, not the whole binary). Is this modified copy that&rsquo;s then executed. In interpretation mode, the binary is also seen as data, and each instruction is used as a lookup table of alternative instructions that have the corresponding functionality (as implemented by the user). In probe mode, the binary is actually modified by overwriting instructions with new instructions. even though this results in a low run-time overhead it&rsquo;s very limited in certain architectures (like x86).</p>
+<p>Whatever the execution mode, once we have control over the execution of a program, through a <code>DBI</code> framework, we then have the ability to add <code>instrumentation</code> into the executing program. We can insert our code, <code>instrumentation</code>, before and after <code>blocks</code> of code, or even replace them completely.</p>
+<p>We can visualize how it works in the diagram below.</p>
+<p><img src="/dbi/DBI_Diagram.png" alt=""></p>
+<p>Also, there are different types of granularity.</p>
+<ul>
+<li>Instruction level</li>
+<li>Basic block level</li>
+<li>Function level</li>
+</ul>
+<p>The granularity choice, as you can guess, will allow you to have more, or less, control over the execution of a program. Obviously, this will have an impact on performance. Also, note that instrumenting a program in its totality is unpractical in most cases.</p>
+<h3 id="performance">Performance</h3>
+<p>You might be thinking what&rsquo;s the performance impact of modifying a running program on the fly as described above. Well, I have a very limited experience to answer this question. However, after reading multiple papers, articles, and presentations, the overhead commonly observed depends on a random number of factors really. Anyway, as kind of expected, the modifications the user implements are responsible for the majority of the overhead. The number 30% is apparently accepted as a common average number observed. Can&rsquo;t really remember where I read this to mention the source, but I definitely read it somewhere. You&rsquo;ll find it for sure in the <code>References</code> section anyway. Obviously, one of the first decisions that you, as a <code>DBI</code> user, will have to make is to decide the amount of <a href="https://en.wikipedia.org/wiki/Code_coverage">code coverage</a> required by your needs and the amount of performance overhead you&rsquo;ll be able to accept as reasonable.</p>
+<h2 id="pin">Pin</h2>
+<p><a href="https://software.intel.com/en-us/articles/pin-a-dynamic-binary-instrumentation-tool">Pin</a> is a <code>DBI</code> framework developed by <a href="https://www.intel.com">Intel Corp</a>. It allows us to build program analysis tools known as <code>Pintools</code>, for <code>Windows</code>, <code>Linux</code>, and <code>OSX</code>. We can use these tools to monitor, modify, and record the behavior of a program while it is running.</p>
+<p><code>Pin</code> is proprietary software. However, we can download and use it free of charge for <strong>non-commercial use</strong>. Besides the documentation and the binaries, <code>Pin</code> also includes source code for a large collection of sample <code>Pintools</code>. These are invaluable examples that we must consider, and definitely read, before developing any <code>Pintool</code>.</p>
+<p>In my opinion, <code>Pin</code> is the easiest <code>DBI</code> framework to use. At least I felt it was easier to dive into it&rsquo;s <code>API</code> than into the <code>DynamoRIO</code> one. Even though I didn&rsquo;t spend too much time trying to learn other <code>APIs</code> besides these two, I had a look at a few others. Like <a href="http://valgrind.org/">Valgrind</a>, <a href="https://triton.quarkslab.com/">Triton</a>, <a href="https://dyninst.org/">Dyninst</a>, and <a href="https://www.frida.re/">Frida</a>. The choice will always depend on what you intend to do, honestly.</p>
+<p>If you want to create a commercial tool and distribute binary versions of it, <code>Pin</code> won&rsquo;t be a good choice. If that&rsquo;s not the case, <code>Pin</code> might be a very good choice. Mainly because based on the tests I did, <code>Pin</code> is stable and reliable. I had some issues running some programs under some <code>DBI</code> frameworks. Mainly big programs, like <code>Office</code> suites, games, and AV engines. Some <code>DBI</code> frameworks were failing miserably, some even with small applications.</p>
+<h4 id="pin-setup-windows">Pin setup (Windows)</h4>
+<p><code>Pin</code> setup in <code>Linux</code> is quite straightforward. However, on <code>Windows</code> systems, it can be a bit tricky. See below how to quickly set it up to get started in case you want to try the samples I&rsquo;ll present in this post.</p>
+<p>Get the latest <code>Pin</code> version from <a href="https://software.intel.com/en-us/articles/pin-a-binary-instrumentation-tool-downloads">here</a>, and unpack it on your <code>C:\</code> drive, or wherever you want. For simplicity, I usually use <code>C:\pin</code>. I advise you to do the same if you plan to follow some of the experiments presented in this post.</p>
+<p>The <code>Pin</code> zip file includes a big collection of sample <code>Pintools</code> under <strong>source/tools</strong>. The <code>API</code> is very easy to read and understand as we&rsquo;ll see. By the end of this post you should be able to read the source code of most of the samples without any struggle (well, kind of).</p>
+<p>I like <code>Visual Studio</code>, and I&rsquo;ll be using it to build &ldquo;every&rdquo; tool mentioned in this post. There&rsquo;s one <code>Pintool</code> sample that&rsquo;s almost ready to be built with <code>Visual Studio</code>. You&rsquo;ll have to adjust only a couple of settings. However, I didn&rsquo;t want to manually copy and rename files every time I wanted to create a new <code>Pintool</code> project. So I created a sample project already tweaked, available <a href="https://github.com/houseofxyz/DBI/tree/master/MyPinTool">here</a> that you can place under <code>C:\pin\source\tools</code>, together with the following <a href="https://github.com/houseofxyz/DBI/tree/master/create_pintool_project.py">python script</a>. The script was inspired by Peter&rsquo;s <a href="https://github.com/corelan/pin/blob/master/win32/createpintool.py">script</a>. However, since the way newer versions of <code>Visual Studio</code> save the settings has changed I had to re-write/create a completely new script.</p>
+<p>So, every time you want to build a new <code>Pintool</code> with <code>Visual Studio</code>, just do:</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-fallback" data-lang="fallback">cd\
+cd pin
+python create_pintool_project.py -p &lt;name_of_your_project&gt;
+</code></pre></div><p>You can then just click the project&rsquo;s solution file and build your <code>Pintool</code> with <code>Visual Studio</code> without any pain. I used <code>Visual Studio Professional 2015</code>, but it will also work with <code>Visual Studio 2017</code>. I did a couple of builds with <code>Visual Studio 2017 Enterprise</code> without any issue.</p>
+<h5 id="pin-visual-studio-integration">Pin Visual Studio integration</h5>
+<p>We can add our <code>Pintools</code> as external tools to <code>Visual Studio</code>. This will allow us to run, and test, our <code>Pintool</code> without using the command line all the time. The configuration is very simple. From the <code>Tools</code> menu, select <code>External tools</code> and a dialog box will appear. Click the <code>Add</code> button and fill out the text input boxes according to the image below.</p>
+<p><img src="/dbi/Visual.Studio.Tools.setup.png" alt=""></p>
+<p>In the <code>Title</code>, input text box enter whatever you want. In the <code>Command</code> input text box enter the full path to your <code>pin.exe</code>, so <code>c:\pin\pin.exe</code> in case you installed it under <code>c:\pin</code>. In the <code>Arguments</code>, you must include all the arguments you want to pass to your Pintool. You&rsquo;ll need at least the ones specified in the image above. The <code>-t</code> is to specify where your Pintool is, and after the <code>--</code> is the target program you want to instrument.</p>
+<p>After the setup, you can simply run your Pintool from the <code>Tools</code> menu as shown in the image below.</p>
+<p><img src="/dbi/Visual.Studio.Pintool.png" alt=""></p>
+<p>Click ok, and enjoy.</p>
+<p><img src="/dbi/Visual.Studio.Tools.run.png" alt=""></p>
+<p>The <code>Output</code> window of <code>Visual Studio</code> will show whatever the output your <code>Pintool</code> is writing to <code>stdout</code>.</p>
+<h2 id="dynamorio">DynamoRIO</h2>
+<p><a href="http://dynamorio.org/">DynamoRIO</a> is another <code>DBI</code> framework originally developed in a collaboration between <a href="https://www.hp.com">HP</a>&rsquo;s Dynamo optimization system and the Runtime Introspection and Optimization (RIO) research group at <a href="http://web.mit.edu/">MIT</a>. It allows us to build program analysis tools known as <code>clients</code>, for <code>Windows</code>, and <code>Linux</code>. We can use these tools to monitor, modify, and record the behavior of a program while it is running.</p>
+<p><code>DynamoRIO</code> was first released as a proprietary binary toolkit in 2002 and was later open-sourced with a <a href="https://en.wikipedia.org/wiki/BSD_licenses">BSD</a> license in 2009. Like <code>Pin</code>, it also comes with source code for multiple <code>client</code> samples. These are invaluable examples to get us started and playing with its <code>API</code>.</p>
+<p><code>DynamoRIO</code> is a runtime code manipulation system which allows code transformation on any part of the program as the program runs. It works as an intermediate platform between applications and operating system.</p>
+<p>As I said before, I didn&rsquo;t find <code>DynamoRIO</code>'s <code>API</code> the most friendly and easy to use. However, if you plan to make a commercial version, and/or distribute binary versions, <code>DynamoRIO</code> might be the best option. One of its advantages is the fact that it is <code>BSD</code> licensed, which means <code>free software</code>. If that&rsquo;s important for you, go with <code>DynamoRIO</code>.</p>
+<p>Also note that&rsquo;s commonly accepted that <code>DynamoRIO</code> is faster than <code>Pin</code>, check the <code>References</code> section. However, is equally accepted that <code>Pin</code> is more reliable than <code>DynamoRIO</code>, which I also personally experienced when running big software programs.</p>
+<h4 id="dynamorio-setup-windows">DynamoRIO setup (Windows)</h4>
+<p>To install <code>DynamoRIO</code> on <code>Windows</code> simply download the latest <code>Windows</code> version from <a href="https://github.com/DynamoRIO/dynamorio/wiki/Downloads">here</a> (DynamoRIO-Windows-7.0.0-RC1.zip at the time of this writing), and similarly to what we did with <code>Pin</code> just unzip it under <code>C:\dynamorio</code>.</p>
+<p>To build your own <code>DynamoRIO</code> projects on Windows it can be a bit tricky though. You can try to follow the instructions <a href="https://github.com/DynamoRIO/dynamorio/wiki/How-To-Build">here</a> or the instructions <a href="http://dynamorio.org/docs/using.html#sec_build">here</a> or, to avoid frustration, just&hellip; use my <code>DynamoRIO</code> <code>Visual Studio</code> template project.</p>
+<p>As I said before, I like <code>Visual Studio</code>. I created a sample project already tweaked with all the <code>includes</code> and <code>libs</code> required (assuming you unzipped <code>DynamoRIO</code> in the directory I mentioned before), available <a href="https://github.com/houseofxyz/DBI/tree/master/MyDynamoRIO">here</a>. Then, more or less the same way we did with <code>Pin</code>, also download the following <a href="https://github.com/houseofxyz/DBI/tree/master/create_dynamorio_project.py">python script</a>. Since the file structure of the project is a bit different I couldn&rsquo;t use the <code>script</code> I wrote before to clone a project, and I had to create a new one specific to <code>DynamoRIO</code>.</p>
+<p>So, every time you want to build a new <code>DynamoRIO</code> client with <code>Visual Studio</code>, just do:</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-fallback" data-lang="fallback">python create_dynamorio_project.py -p &lt;name_of_your_project&gt;
+</code></pre></div><p>The command above assumes that both the <code>Python</code> script and the template project mentioned above are in the same folder.</p>
+<p>You can then just click the project&rsquo;s solution file and build your <code>DynamoRIO client</code> with <code>Visual Studio</code> without any pain. I used <code>Visual Studio Professional 2015</code>, but it will also work with <code>Visual Studio 2017</code>. I did a couple of builds with <code>Visual Studio 2017 Enterprise</code> without any issue.</p>
+<h5 id="dynamorio-visual-studio-integration">DynamoRIO Visual Studio integration</h5>
+<p>We can also integrate <code>DynamoRIO</code> with <code>Visual Studio</code>, exactly the same way we did with <code>Pin</code>. Since the setup process is exactly the same, I&rsquo;ll only leave here the screenshot below and you can figure how to do the rest.</p>
+<p><img src="/dbi/Visual.Studio.Tools.dynamorio.setup.png" alt=""></p>
+<h2 id="frida">Frida</h2>
+<p><a href="https://www.frida.re/">Frida</a> is a <code>DBI</code> framework developed mainly by <a href="https://twitter.com/oleavr">Ole</a>. It became very popular among the &ldquo;mobile&rdquo; community and gained a considerable group of contributors (now sponsored by <a href="https://www.nowsecure.com/">NowSecure</a>). <code>Frida</code> supports <code>OSX</code>, <code>Windows</code>, <code>Linux</code>, and <code>QNX</code>, and has an <code>API</code> available for multiple languages, like <code>Python</code>, <code>C#</code>, <code>Swift</code>, <code>Qt\QML</code> and <code>C</code>. Just like the <code>DBI</code> frameworks mentioned above, we can use <code>Frida</code> together with <code>scripts</code> to monitor, modify, and record the behavior of a program while it is running.</p>
+<p><code>Frida</code> is free (free as in free beer) and is very easy to install (see below). There are also many usage <a href="https://www.frida.re/docs/home/">examples online</a> that we can use to get started. <code>Frida</code> injects Google&rsquo;s <a href="https://en.wikipedia.org/wiki/Chrome_V8">V8 engine</a> into a process. Then, <code>Frida</code> core communicates with <code>Frida</code>'s agent (process side) and uses the <code>V8</code> engine to run the <code>JavaScript</code> code (creating dynamic hooks).</p>
+<p><code>Frida</code>'s <code>API</code> has two main parts. The <code>JavaScript</code> <code>API</code> and the <code>bindings API</code>. I didn&rsquo;t dive too deep into them and just used the most popular I believe. That is the <code>JavaScript</code> <code>API</code>. I found it easy to use, very flexible, and I could use it to <strong>quickly</strong> write some introspection tools.</p>
+<p>Even though <code>Pin</code> and <code>DynamoRIO</code> are the &ldquo;main&rdquo; <code>DBI</code> frameworks, and most mature, <code>Frida</code> has some advantages. As mentioned above, it has bindings for other/more languages, and rapid tool development is a reality. It also has some disadvantages, less maturity, less documentation, less granularity than other frameworks, and consequently lack of some functionalities.</p>
+<h4 id="frida-setup-windows">Frida setup (Windows)</h4>
+<p><code>Frida</code>'s setup is very easy. Just download <code>https://bootstrap.pypa.io/get-pip.py</code> and then run:</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-fallback" data-lang="fallback">python get-pip.py
+</code></pre></div><p>And, to actually install <code>Frida</code> type the following.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-fallback" data-lang="fallback">cd\
+cd Python27\Scripts
+pip.exe install frida
+</code></pre></div><p>And that&rsquo;s it, you are ready to go. Yes, you have to install <code>Python</code> before the steps above. However, I don&rsquo;t know anyone that doesn&rsquo;t have <code>Python</code> installed so I just assume it&rsquo;s already there.</p>
+<h2 id="generic-dbi-usage">Generic DBI usage</h2>
+<p>Before diving into some code, I&rsquo;ll try to document in this section generic ways of using some of the <code>DBI</code> frameworks I mentioned before. More precisely <a href="https://software.intel.com/en-us/articles/pin-a-dynamic-binary-instrumentation-tool">Pin</a>, and <a href="http://www.dynamorio.org/">DynamoRIO</a>.</p>
+<p>As mentioned before, the most common execution mode in a <code>DBI</code> system is the JIT (just-in-time-compiler). The JIT compiler will create a modified copy of chunks of instructions just before executing them, and these will be cached in memory. This mode of execution is the default in most of the <code>DBI</code> frameworks I had a look and is also generally accepted as the most robust execution model.</p>
+<p>Also, as mentioned before, there are two main methods to control the execution of a program. The first is to run the entire program under the control of the <code>DBI</code> framework. The second is to attach to a program already running. Just like a debugger.</p>
+<p>Below is the standard way to run a program under the control of a <code>DBI</code> system. Our target/guest application is not directly launched from the command line. Instead, it is passed as an argument to the <code>DBI</code> system. The <code>DBI</code> system initializes itself, and then launches the program under its control and modifies the program according to the plug-in. The plug-in contains the actual user-defined code, that is our <code>instrumentation</code> code. The plug-in on <code>Pin</code> it&rsquo;s called <code>Pintool</code>, on <code>DynamoRIO</code> it&rsquo;s called <code>client</code>, on <code>Frida</code> I believe it&rsquo;s simply called <code>script</code>?</p>
+<p><code>PIN</code> JIT mode.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-fallback" data-lang="fallback">pin.exe &lt;pin args&gt; -t &lt;pintool&gt;.dll &lt;pintool args&gt; -- target_program.exe &lt;target_program args&gt;
+</code></pre></div><p><code>PIN</code> Probe mode.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-fallback" data-lang="fallback">pin.exe -probe &lt;pin args&gt; -t &lt;pintool&gt;.dll &lt;pintool args&gt; -- target_program.exe &lt;target_program args&gt;
+</code></pre></div><p><code>DynamoRIO</code> JIT mode.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-fallback" data-lang="fallback">drrun.exe -client &lt;dynamorio client&gt;.dll 0 &#34;&#34; target_program.exe &lt;target_program args&gt;
+</code></pre></div><p><code>DynamoRIO</code> Probe mode.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-fallback" data-lang="fallback">drrun.exe -mode probe -client &lt;dynamorio client&gt;.dll 0 &#34;&#34; target_program.exe &lt;target_program args&gt;
+</code></pre></div><p>As we can see above, the way we launch <a href="https://software.intel.com/en-us/articles/pin-a-dynamic-binary-instrumentation-tool">Pin</a> and <a href="http://www.dynamorio.org/">DynamoRIO</a> it is not that different. In <code>Linux</code> systems, it&rsquo;s pretty much the same (yes, remove the <code>.exe</code>, and substitute the <code>.dll</code> by <code>.so</code> and that&rsquo;s it).</p>
+<p>Obviously, there are many other options that can be passed on the command line besides the ones shown above. For a full list check the help/man pages. Above are just the <strong>required</strong> options for reference.</p>
+<p><a href="https://www.frida.re/">Frida</a> is a bit different, and we&rsquo;ll see ahead how to use it.</p>
+<p>If you want to attach to a running process, you can do it with <code>Pin</code>. However, as of today, attaching to a process with <code>DynamoRIO</code> <a href="https://groups.google.com/forum/#!searchin/dynamorio-users/attach/dynamorio-users/4N1wX2Vzt-I/xtVcyCt5O7UJ">is not supported</a>. However, there are two methods of running a process under <code>DynamoRIO</code> in <code>Windows</code>. You can read more about it <a href="http://dynamorio.org/docs/page_deploy.html#win_deploy">here</a>.</p>
+<p>With <code>Pin</code> you can simply attach to a process by using the <code>-pid</code> argument as shown below.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-fallback" data-lang="fallback">pin.exe -pid &lt;target pid&gt; &lt;other pin args&gt; -t &lt;pintool&gt;.dll &lt;pintool args&gt;
+</code></pre></div><h3 id="user-defined-modifications">User defined modifications</h3>
+<p>Despite the <code>DBI</code> we are using, each <code>DBI</code> framework provides an <code>API</code> that we can use to specify how we modify the target/guest program. The abstraction introduced by the <code>API</code> is used together with code usually written in <code>C</code>, or <code>C++</code> (or even <code>JavaScript</code>, or <code>Swift</code> in the case of <code>Frida</code>) to create a plug-in (in the form of a shared library as we saw above) which will then be &ldquo;injected&rdquo; in the running target/guest program by the <code>DBI</code> system. It will run on the <strong>same address space</strong> of the target/guest program.</p>
+<p>This means that in order for us to use a <code>DBI</code> system, we need not only to know how to launch a target/guest program, as illustrated above but also be familiar and understand the <code>API</code> exported by the framework we want to use.</p>
+<p>Unfortunately, the <code>APIs</code> of these multiple frameworks are very different. However, as will see the general concepts apply to most of them. As I mentioned before, I&rsquo;ll be focusing mainly in <code>Pin</code>. I&rsquo;ll also try to recreate more or less the same functionality with <code>DynamoRIO</code> and <code>Frida</code>, so we will also get a bit familiar with their <code>API</code> somehow. Note that the <code>API</code> coverage won&rsquo;t be by any means extensive. I advise you to check each <code>DBI</code> framework <code>API</code> documentation if you want to know more. By following this post you&rsquo;ll simply get a sense of what&rsquo;s available in the <code>API</code>, eventually limited to the use case scenario I chose.</p>
+<p>The idea behind any <code>API</code> is to hide the complexity of certain operations from the user, without removing any power to perform any task (including complex tasks). We can usually say that the easier is to use the <code>API</code> the better it is.</p>
+<p>All the <code>APIs</code> allow us to, in a certain way, iterate over the instructions the <code>DBI</code> system is about to run. This allows us to <strong>add</strong>, <strong>remove</strong>, <strong>modify</strong>, or <strong>observe</strong> the instructions <strong>prior</strong> to execute them. For example, my initial idea was to simply log (observe) all the calls to memory related functions (<code>malloc</code>, and <code>free</code>).</p>
+<p>We can, not only introduce instructions to get profiling/tracing information about a program but also introduce complex changes to the point of completely replace certain instructions with a completely new implementation. Think for example, as replacing all the <code>malloc</code> calls with your own <code>malloc</code> implementation (that, for example, introduces shadow bytes and so on).</p>
+<p>In <code>DynamoRIO</code> it&rsquo;s slightly different. However, in <code>Pin</code> most of the <code>API</code> routines are call based. This makes the <code>API</code> very user-friendly. At least to the way I think when I visualize the usage of a <code>DBI</code> system. This is also possible with <code>DynamoRIO</code>, obviously, as we will see. Basically, we register a <code>callback</code> to be <code>notified</code> when certain events occur (a call to <code>malloc</code>). For performance reasons, <code>Pin</code> inlines these <code>callbacks</code>.</p>
+<p>As we saw, most of the <code>DBI</code> frameworks support multiple operating systems, and platforms. Most of the time, the <code>APIs</code> are the same and all the differences between operating systems are kept away from the user and handled &ldquo;under the table&rdquo;. However, there are still certain <code>APIs</code> that are specific to certain operating systems. You need to be aware of that.</p>
+<p>It&rsquo;s also important to distinguish between <code>instrumentation</code> and <code>analysis</code> code. <code>Instrumentation</code> code is applied to specific code locations, while <code>analysis</code> code is applied to events that occur at some point in the execution of the program. As stated on <a href="https://en.wikipedia.org/wiki/Pin_(computer_program)">Wikipedia</a> <em>Instrumentation routines are called when code that has not yet been recompiled is about to be run, and enable the insertion of analysis routines. Analysis routines are called when the code associated with them is run.</em> In other words, <code>instrumentation</code> routines define <strong>where</strong> to insert instrumentation. <code>Analysis</code> routines define <strong>what</strong> to do when the instrumentation is activated.</p>
+<p>The <code>APIs</code> of <code>Pin</code>, <code>DynamoRIO</code>, and <code>Frida</code> allow us to iterate over the target/guest program with a distinct level of granularities. That is, iterate over every single instruction, just before an instruction execute, entire basic blocks, traces (multiple basic blocks), or the entire target/guest program (image).</p>
+<h2 id="example-tool">Example tool</h2>
+<p>As I mentioned, while I was playing with <code>Heap Spraying</code> I felt the need of logging all the memory allocations my code was performing. Since I felt a bit annoyed after doing this repeatedly with <code>WinDbg</code>, even with some automation,  I thought about doing it with a <code>DBI</code> framework. More precisely, with <code>Pin</code>.</p>
+<p>I remember that during one of <a href="https://twitter.com/corelanc0d3r">Peter Van Eeckhoutte</a>&rsquo;s exploitation classes he mentioned he had written something similar. I looked at his <a href="https://github.com/corelan">GitHub</a> and found his <a href="https://github.com/corelan/pin">Pintool</a>. I had a look at his code, but since he used <code>Visual Studio 2012</code>, plus an old version of <code>Pin</code>, plus a different approach of what I had in mind, plus a different goal (I had in mind doing something else besides logging memory allocations), and things changed a bit since then&hellip; I decided to write my own <code>Pintool</code> instead of using, or modifying, his code. After all, it&rsquo;s all about struggling and learning. Not running tools. Later I realized that most of his code comes from the <code>Pin</code> documentation, so does mine.</p>
+<p>The goal was to write a <code>Pintool</code>, or a <code>DynamoRIO client</code>, and use it to detect critical memory issues. Such as memory leaks and double frees. Yes, in <code>C/C++</code> programs. You may say that there are plenty of tools that already allow you to do that, and that&rsquo;s eventually true (in fact <code>DynamoRIO</code> comes with a couple of tools that can help here). The point here was to learn how to write my own tool, have fun, get familiar with <code>DBI</code> frameworks, and document my experiments for later reference. Eventually, it will also be used as a soft introduction to <code>Dynamic Binary Analysis</code> by people who don&rsquo;t know where to start.</p>
+<p>So, the &ldquo;critical memory issues&rdquo; I had in mind weren&rsquo;t really that difficult to <code>trace</code>. After looking at some almost ready to go code samples, I found in the <code>Pin</code>'s documentation, I ended up expanding a bit the initial logging goal I had in mind. And added a couple of &ldquo;features&rdquo; to aid my vulnerability discover capabilities.</p>
+<p>As you know, some common memory (de)allocation problems in <code>C/C++</code> programs are:</p>
+<ul>
+<li><a href="https://en.wikipedia.org/wiki/Memory_leak">Memory leaks</a></li>
+<li><a href="https://en.wikipedia.org/wiki/C_dynamic_memory_allocation">Double frees</a></li>
+<li><a href="https://en.wikipedia.org/wiki/C_dynamic_memory_allocation">Invalid frees</a></li>
+<li><a href="https://en.wikipedia.org/wiki/Dangling_pointer">Use after frees</a> (Note, the code presented in this post doesn&rsquo;t detect potential <code>user after free</code> issues. An improved version of this code does, available <a href="https://github.com/houseofxyz/WinMallocTracer">here</a>).</li>
+</ul>
+<p>I assume everyone knows what the problems listed above are. If you don&rsquo;t, or you need a &lsquo;refresh&rsquo;, just click the links above.</p>
+<p>At least the first 3 problems are very &ldquo;easy&rdquo; to detect with a <code>Pintool</code>, or a <code>DynamoRIO client</code>. I&rsquo;ll do a couple of assumptions. The target program is a single binary/executable file, and the only functions that I&rsquo;ll track to allocate and free memory are <code>malloc</code> and <code>free</code> (<code>calloc</code>, and <code>realloc</code> are just &ldquo;special&rdquo; versions of <code>malloc</code> anyway). Internally <code>new</code> and <code>delete</code> use <code>malloc</code> and <code>free</code>, so we are covered. I can simply &ldquo;monitor&rdquo; these calls. I won&rsquo;t consider other functions like <code>realloc</code>, <code>calloc</code>, <code>HeapAlloc</code>, <code>HeapFree</code>, etc. (for now). Yes, for now, I&rsquo;ll focus only on the generic <a href="https://msdn.microsoft.com/en-us/library/6ewkz86d.aspx">malloc</a> and <a href="https://msdn.microsoft.com/en-us/library/we1whae7.aspx">free</a> functions from the C Run-Time Library. In Windows, these functions when called will then call <a href="https://docs.microsoft.com/en-us/windows/desktop/api/HeapApi/nf-heapapi-heapalloc">HeapAlloc</a> and <a href="https://docs.microsoft.com/en-us/windows/desktop/api/HeapApi/nf-heapapi-heapfree">HeapFree</a>.</p>
+<p>Here&rsquo;s a diagram showing the relationship of <code>Windows API</code> calls used to allocate process memory (from the book <a href="https://www.amazon.co.uk/Art-Memory-Forensics-Detecting-Malware/dp/1118825098">The Art of Memory Forensics</a>, and used with authorization. Thanks to <a href="https://twitter.com/attrc">Andrew Case</a>).</p>
+<p><img src="/dbi/memory.allocation.windows.png" alt=""></p>
+<p>As we can see above, ideally we should actually be &ldquo;monitoring&rdquo; <code>RtlAllocateHeap</code> and <code>RtlFreeHeap</code>. However, we can ignore this for now. This way, if you just want to try this code in <code>Linux</code>, or <code>OSX</code>, its mostly copy and paste. Later, in the main version of this tool, I&rsquo;ll indeed be only working with the Windows <a href="https://docs.microsoft.com/en-us/windows/desktop/Memory/heap-functions">Heap functions</a> or my <code>Pintool</code> won&rsquo;t work with <code>Internet Explorer</code>, for example.</p>
+<p>Whenever a program calls <code>malloc</code>, I&rsquo;ll log the return address (that is, the address of the allocated memory region). Whenever a program calls <code>free</code>, I&rsquo;ll match its address being freed with the addresses I saved before. If it has been allocated and not freed, I&rsquo;ll mark it as free. If it has been allocated and already freed, then we have a double free. If I don&rsquo;t have that address saved has been allocated before, then we have a free of unallocated memory. Simple, huh? Finally, when the program exits, I can look at my records to detect memory addresses that have been allocated but not freed. This way I can also detect memory leaks.</p>
+<p>As we&rsquo;ll see, using a dynamic binary framework to achieve what&rsquo;s described above can be done with very little effort. However, there are some issues that we&rsquo;ll ignore to keep this post simple. As you can eventually guess, the <code>Heap Manager</code> also plays a role here, and our tool might have to be <code>Heap Manager</code> specific if we don&rsquo;t want to be flooded with false positives. Also, as mentioned before, this tool will tell us there&rsquo;s a bug, but not exactly where. You can tell your tool to <code>break/pause</code> when an issue is found and attach a <code>debugger</code>. However, depending on the class of <code>bug</code> it may still be very hard to find where&rsquo;s the <code>bug</code> and reproduce it.</p>
+<p>While I was writing this blog post, a very interesting tool from <a href="http://www.joxeankoret.com/">Joxean Koret</a> called <a href="https://github.com/joxeankoret/membugtool">membugtool</a> was released during the <a href="http://securitycongress.euskalhack.org/">EuskalHack 2018 conference</a>. His tool does a bit more than mine (well, actually considerable more), and the code is certainly better than mine. Keep following this post if you want to learn more about <code>Pin</code> and other <code>DBI</code> frameworks, but don&rsquo;t forget to check his tool later. I was actually very happy when I saw it released because it means my idea wasn&rsquo;t a complete nonsense. On top of that Joxean Koret is a respected researcher that I&rsquo;ve been following for quite a long time, mainly due to his awesome work on breaking Antivirus engines.</p>
+<h2 id="targetguest-program-exercisepinexe">Target/Guest program (ExercisePin.exe)</h2>
+<p>To test our multiple dynamic binary analysis tools, I wrote the following non-sense program (I called it <code>ExercisePin.exe</code>). It&rsquo;s quite clear that there are some memory leaks, an invalid free, and a potential double-free (depending on our input).</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp"><span style="color:#0f0;font-weight:bold">#include</span> <span style="color:#0f0;font-weight:bold">&lt;stdio.h&gt;</span><span style="color:#0f0;font-weight:bold">
+</span><span style="color:#0f0;font-weight:bold">#include</span> <span style="color:#0f0;font-weight:bold">&lt;stdlib.h&gt;</span><span style="color:#0f0;font-weight:bold">
+</span><span style="color:#0f0;font-weight:bold"></span>
+<span style="color:#fff;font-weight:bold">void</span> do_nothing() {
+  <span style="color:#fff;font-weight:bold">int</span> *xyz = (<span style="color:#fff;font-weight:bold">int</span>*)malloc(<span style="color:#ff0;font-weight:bold">2</span>);
+}
+
+<span style="color:#fff;font-weight:bold">int</span> main(<span style="color:#fff;font-weight:bold">int</span> argc, <span style="color:#fff;font-weight:bold">char</span>* argv[]) {
+  free(<span style="color:#fff;font-weight:bold">NULL</span>);
+
+  do_nothing();
+
+  <span style="color:#fff;font-weight:bold">char</span> *A = (<span style="color:#fff;font-weight:bold">char</span>*)malloc(<span style="color:#ff0;font-weight:bold">128</span> * <span style="color:#fff;font-weight:bold">sizeof</span>(<span style="color:#fff;font-weight:bold">char</span>));
+  <span style="color:#fff;font-weight:bold">char</span> *B = (<span style="color:#fff;font-weight:bold">char</span>*)malloc(<span style="color:#ff0;font-weight:bold">128</span> * <span style="color:#fff;font-weight:bold">sizeof</span>(<span style="color:#fff;font-weight:bold">char</span>));
+  <span style="color:#fff;font-weight:bold">char</span> *C = (<span style="color:#fff;font-weight:bold">char</span>*)malloc(<span style="color:#ff0;font-weight:bold">128</span> * <span style="color:#fff;font-weight:bold">sizeof</span>(<span style="color:#fff;font-weight:bold">char</span>));
+
+  free(A);
+  free(C);
+
+  <span style="color:#fff;font-weight:bold">if</span> (argc != <span style="color:#ff0;font-weight:bold">2</span>)
+    do_nothing();
+  <span style="color:#fff;font-weight:bold">else</span>
+    free(C);
+
+  puts(<span style="color:#0ff;font-weight:bold">&#34;done&#34;</span>);
+  <span style="color:#fff;font-weight:bold">return</span> <span style="color:#ff0;font-weight:bold">0</span>;
+}
+</code></pre></div><p>As you can see it&rsquo;s a very stupid program, I recommend you to test your tools with real software and see how they behave. Also, check the previously mentioned project <a href="https://github.com/joxeankoret/membugtool">membugtool</a> since it includes a very nice <a href="https://github.com/joxeankoret/membugtool/tree/master/tests">set of tests</a> which actually made me lazy and I didn&rsquo;t even try to improve the code above and create new sample buggy programs. Depending on which compiler you use to build this sample, you might have different results. I built mine with <code>Visual Studio</code>. It has advantages, and disadvantages. If you prefer you can use <a href="https://sourceforge.net/projects/orwelldevcpp/">Dev-C++</a> (which uses <a href="https://gcc.gnu.org/">GCC</a>), or <a href="http://www.cygwin.com/">cygwin</a> (and install <code>gcc</code> or <code>i686-w64-mingw32-gcc.exe</code>), or even <a href="https://www.embarcadero.com/free-tools/ccompiler">Embarcadero</a>. Anyway, expect different results depending on the compiler you choose to build the target program.</p>
+<h2 id="basic-pintool-malloctracer">Basic Pintool (MallocTracer)</h2>
+<p>In this first <code>Pintool</code> example, I&rsquo;m logging all the <code>malloc</code> and <code>free</code> calls. The instrumentation is added before and after the <code>malloc</code> call and logs the parameter passed to the call and its return value. For the <code>free</code> call we&rsquo;ll only look at its parameter, and not at its return value. So the instrumentation is only added before the call. This <code>Pintool</code> will not be very useful in big applications since it doesn&rsquo;t really tell you where the issue is. Anyway, it is a good start and will serve the purpose of &ldquo;showing&rdquo; how the <code>Pin</code> <code>API</code> can be used.</p>
+<p>We need to start by choosing which instrumentation <a href="https://software.intel.com/sites/landingpage/pintool/docs/71313/Pin/html/index.html#GRAN">granularity</a> we&rsquo;ll use. Have a look at the documentation for more details. I&rsquo;ll be using <code>Image</code> <code>instrumentation</code>.</p>
+<p><em>Image instrumentation lets the Pintool inspect and instrument an entire image, IMG, when it is first loaded. A Pintool can walk the sections, SEC, of the image, the routines, RTN, of a section, and the instructions, INS of a routine. Instrumentation can be inserted so that it is executed before or after a routine is executed, or before or after an instruction is executed. Image instrumentation utilizes the IMG_AddInstrumentFunction API call. Image instrumentation depends on symbol information to determine routine boundaries hence PIN_InitSymbols must be called before PIN_Init.</em></p>
+<p>We start with some includes. To use the <code>Pin API</code> we need to include <code>pin.h</code>.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp"><span style="color:#0f0;font-weight:bold">#include</span> <span style="color:#0f0;font-weight:bold">&#34;pin.h&#34;</span><span style="color:#0f0;font-weight:bold">
+</span><span style="color:#0f0;font-weight:bold">#include</span> <span style="color:#0f0;font-weight:bold">&lt;iostream&gt;</span><span style="color:#0f0;font-weight:bold">
+</span><span style="color:#0f0;font-weight:bold">#include</span> <span style="color:#0f0;font-weight:bold">&lt;fstream&gt;</span><span style="color:#0f0;font-weight:bold">
+</span><span style="color:#0f0;font-weight:bold">#include</span> <span style="color:#0f0;font-weight:bold">&lt;map&gt;</span><span style="color:#0f0;font-weight:bold">
+</span></code></pre></div><p>The <code>iostream</code> header is required for basic input/output operations, and the <code>fstream</code> header is required because I&rsquo;ll write the output of my <code>Pintool</code> to a file. In small programs, we could live with the console output, however for big programs we need to save the output to a file. If you are instrumenting <code>Internet Explorer</code> for example and playing with some <code>JavaScript</code> code, the amount of <code>malloc</code> and <code>free</code> calls is impressive (well, <code>RtlAllocateHeap</code>, and <code>RtlFreeHeap</code>). In some big programs you might not even want to write to disk every time there&rsquo;s a call due to performance reasons, but let&rsquo;s ignore that to keep things simple.</p>
+<p>Additionally, I&rsquo;ll use a <code>map</code> container to keep a log of all the memory allocated and freed. Check the <code>References</code> section to see how the <code>C++</code> <code>map</code> container &ldquo;works&rdquo; if you aren&rsquo;t used to writing code in <code>C++</code>. Since I&rsquo;m not a developer, I&rsquo;m not, so my code can be a bit scary but hopefully works. Consider yourself warned.</p>
+<p>I&rsquo;ll also have some global variables. It&rsquo;s very common to use global variables in a <code>Pintool</code>, have a look at the samples provided to get a feeling of how they are most commonly used. In my case, I&rsquo;ll use the following global variables.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp">map&lt;ADDRINT, <span style="color:#fff;font-weight:bold">bool</span>&gt; MallocMap;
+ofstream LogFile;
+KNOB&lt;string&gt; LogFileName(KNOB_MODE_WRITEONCE, <span style="color:#0ff;font-weight:bold">&#34;pintool&#34;</span>, <span style="color:#0ff;font-weight:bold">&#34;o&#34;</span>, <span style="color:#0ff;font-weight:bold">&#34;memprofile.out&#34;</span>, <span style="color:#0ff;font-weight:bold">&#34;Memory trace file name&#34;</span>);
+</code></pre></div><p>I already mentioned the <code>map</code> container above, again have a look <a href="http://www.cplusplus.com/reference/map/map/begin/">here</a> if you don&rsquo;t know how it works. The idea is to <code>store</code> in this <code>MallocMap</code> the state of each allocation. The <code>ADDRINT</code> type is defined in <code>pin.h</code>, and as you can guess represents a memory address. It will be mapped to a <code>BOOL</code> value. If the <code>BOOL</code> value is set to <code>true</code> it means it has been deallocated.</p>
+<p>The <code>LogFile</code> is the output file where I&rsquo;ll save the output of the <code>Pintool</code>. Lastly, the <code>KNOB</code> variable. It is basically a switch supported by our <code>Pintool</code> (a way to get command arguments to our <code>Pintool</code>. This <code>KNOB</code> allows us to specify the name of the log file through the <strong>&ldquo;o&rdquo;</strong> switch. Its default value is &ldquo;memprofile.out&rdquo;.</p>
+<p>If we look at the <code>main</code> function of the code samples, you&rsquo;ll see that they are all very similar. And the one below is no exception.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp"><span style="color:#fff;font-weight:bold">int</span> main(<span style="color:#fff;font-weight:bold">int</span> argc, <span style="color:#fff;font-weight:bold">char</span> *argv[])
+{
+  PIN_InitSymbols();
+  PIN_Init(argc, argv);
+  LogFile.open(LogFileName.Value().c_str());
+  IMG_AddInstrumentFunction(CustomInstrumentation, <span style="color:#fff;font-weight:bold">NULL</span>);
+  PIN_AddFiniFunction(FinalFunc, <span style="color:#fff;font-weight:bold">NULL</span>);
+  PIN_StartProgram();
+
+  <span style="color:#fff;font-weight:bold">return</span> <span style="color:#ff0;font-weight:bold">0</span>;
+}
+</code></pre></div><p>I have to call <code>PIN_InitSymbols</code> before <code>PIN_Init</code> because I&rsquo;m using <code>Image instrumentation</code>, which depends on symbol information. Then I open the log file for writing, and I call <a href="https://software.intel.com/sites/landingpage/pintool/docs/97503/Pin/html/group__IMG__BASIC__API.html#ga494869187b5d94d7dd346bc9ff49642f">IMG_AddInstrumentFunction</a>. The instrumentation function that I&rsquo;ll be using is called <code>CustomInstrumentation</code> and is defined by me (not a <code>Pin</code> <code>API</code> function). You can call it whatever you want.</p>
+<p>Then I have to call <a href="https://software.intel.com/sites/landingpage/pintool/docs/97554/Pin/html/group__PIN__CONTROL.html#gac167b8d28d255e53a0ac1f6e9edcd3ec">PIN_AddFiniFunction</a>, which is a call to a function to be executed immediately before the application exits. In this case, my function is <code>FinalFunc</code>.</p>
+<p>Finally, I call <a href="https://software.intel.com/sites/landingpage/pintool/docs/97554/Pin/html/group__PIN__CONTROL.html#gaded401aeb030a76ee3396137b06ad808">PIN_StartProgram</a> to start executing my program. This function never returns.</p>
+<p>So let&rsquo;s have a look at my <code>CustomInstrumentation()</code> function.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp">VOID CustomInstrumentation(IMG img, VOID *v) 
+{
+  <span style="color:#fff;font-weight:bold">for</span> (SYM sym = IMG_RegsymHead(img); SYM_Valid(sym); sym = SYM_Next(sym))
+  {
+    string undFuncName = PIN_UndecorateSymbolName(SYM_Name(sym), UNDECORATION_NAME_ONLY);
+
+    <span style="color:#fff;font-weight:bold">if</span> (undFuncName == <span style="color:#0ff;font-weight:bold">&#34;malloc&#34;</span>)
+    {
+      RTN allocRtn = RTN_FindByAddress(IMG_LowAddress(img) + SYM_Value(sym));
+
+      <span style="color:#fff;font-weight:bold">if</span> (RTN_Valid(allocRtn))
+      {
+        RTN_Open(allocRtn);
+
+        <span style="color:#007f7f">// Record Malloc size
+</span><span style="color:#007f7f"></span>        RTN_InsertCall(allocRtn, IPOINT_BEFORE, (AFUNPTR)LogBeforeMalloc,
+          IARG_FUNCARG_ENTRYPOINT_VALUE, <span style="color:#ff0;font-weight:bold">0</span>, IARG_END);
+
+        <span style="color:#007f7f">// Record Malloc return address
+</span><span style="color:#007f7f"></span>        RTN_InsertCall(allocRtn, IPOINT_AFTER, (AFUNPTR)LogAfterMalloc,
+          IARG_FUNCRET_EXITPOINT_VALUE, IARG_END);
+
+        RTN_Close(allocRtn);
+      }
+    }
+    <span style="color:#fff;font-weight:bold">else</span> <span style="color:#fff;font-weight:bold">if</span> (undFuncName == <span style="color:#0ff;font-weight:bold">&#34;free&#34;</span>)
+    {
+      RTN freeRtn = RTN_FindByAddress(IMG_LowAddress(img) + SYM_Value(sym));
+
+      <span style="color:#fff;font-weight:bold">if</span> (RTN_Valid(freeRtn))
+      {
+        RTN_Open(freeRtn);
+
+        RTN_InsertCall(freeRtn, IPOINT_BEFORE, (AFUNPTR)LogFree,
+          IARG_FUNCARG_ENTRYPOINT_VALUE, <span style="color:#ff0;font-weight:bold">0</span>,
+          IARG_END);
+
+        RTN_Close(freeRtn);
+      }
+    }
+  }
+}
+</code></pre></div><p>We need to &ldquo;tell&rdquo; <code>Pin</code> what are the <code>instrumentation</code> routines, and when to execute them. The instrumentation routine above is called every time an <code>image</code> is loaded, and then we also &ldquo;tell&rdquo; <code>Pin</code> where to insert the <code>analysis</code> routines.</p>
+<p>Basically, above, when we find a call to <code>malloc</code> or <code>free</code> we insert the analysis routines by using the <a href="https://software.intel.com/sites/landingpage/pintool/docs/81205/Pin/html/group__RTN__BASIC__API.html#ga76bde295a78d1232fd6ff98a5ff011cf">RTN_InsertCall</a> function.</p>
+<p>The <code>RTN_InsertCall</code> accepts multiple arguments, a variable number of arguments actually. Three are quite important, and you can easily guess which ones by looking at these calls. The first is the routine we want to instrument. The second is an <a href="https://software.intel.com/sites/landingpage/pintool/docs/97554/Pin/html/group__INST__ARGS.html#ga707ea08e31f44f4a81e2a7766123bad7">IPOINT</a> that determines where the analysis call is inserted relative to the instrumented object. And the third is the analysis routine to be inserted.</p>
+<p>Also, note that all <code>RTN_InsertCall</code> functions must be preceded by a call to <code>RTN_Open</code> and followed by a call to <code>RTN_Close</code>.</p>
+<p>We can specify a list of arguments to be passed to the analysis routine, and this list must be terminated with <a href="https://software.intel.com/sites/landingpage/pintool/docs/97503/Pin/html/group__INST__ARGS.html">IARG_END</a>. As we can also guess by looking at the code, to pass the return value of <code>malloc</code> to the analysis routine we use <a href="https://software.intel.com/sites/landingpage/pintool/docs/97503/Pin/html/group__INST__ARGS.html#gga089c27ca15e9ff139dd3a3f8a6f8451da19dc8d3703330b7b1e1064336dd235cf">IARG_FUNCRET_EXITPOINT_VALUE</a>. To pass the argument of the <code>malloc</code> or <code>free</code> calls to the analysis routine, we use <a href="https://software.intel.com/sites/landingpage/pintool/docs/97503/Pin/html/group__INST__ARGS.html#gga089c27ca15e9ff139dd3a3f8a6f8451dab418d242314ea7c67b1febf7667e93a1">IARG_FUNCARG_ENTRYPOINT_VALUE</a> followed by the index of the argument. In our case, both are <code>0</code> (first and only argument).</p>
+<p>All the <code>Pin</code> functions that operate at the routine level start with <code>RTN_</code>. Have a look at the <code>RTN Routine Object</code> documentation <a href="https://software.intel.com/sites/landingpage/pintool/docs/81205/Pin/html/group__RTN__BASIC__API.html">here</a>.</p>
+<p>Also, all the <code>Pin</code> functions that operate at the <code>image</code> level start with <code>IMG_</code>. Have a look at the <code>IMG Image Object</code> documentation <a href="https://software.intel.com/sites/landingpage/pintool/docs/97503/Pin/html/group__IMG__BASIC__API.html">here</a>.</p>
+<p>The same applies to all the <code>Pin</code> functions that operate at the <code>symbol</code> level, they all (or almost all) start with <code>SYM_</code>. Have a look at the <code>SYM Symbol Object</code> documentation <a href="https://software.intel.com/sites/landingpage/pintool/docs/71313/Pin/html/group__SYM__BASIC__API.html">here</a>.</p>
+<p>You might be thinking how <code>Pin</code> finds <code>malloc</code> and <code>free</code>. <code>Pin</code> will use whatever symbol information is available. Debug symbols from the target/guest program if available, <code>PDB</code> files if available, export tables, and <a href="https://docs.microsoft.com/en-us/windows/desktop/debug/debug-help-library">dbghelp</a>. There are two possible methods to <code>instrument</code> our functions. We can use <a href="https://software.intel.com/sites/landingpage/pintool/docs/81205/Pin/html/group__RTN__BASIC__API.html#ga77a2ad03e0431b881d6c3019b45261eb">RTN_FindByName</a>, or alternatively handling <a href="https://en.wikipedia.org/wiki/Name_mangling">name-mangling</a> and multiple symbols (the method I used) as shown below.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp">  <span style="color:#fff;font-weight:bold">for</span> (SYM sym = IMG_RegsymHead(img); SYM_Valid(sym); sym = SYM_Next(sym))
+  {
+    string undFuncName = PIN_UndecorateSymbolName(SYM_Name(sym), UNDECORATION_NAME_ONLY);
+
+    <span style="color:#fff;font-weight:bold">if</span> (undFuncName == <span style="color:#0ff;font-weight:bold">&#34;malloc&#34;</span>) <span style="color:#007f7f">// find the malloc function
+</span></code></pre></div><p>After we find the calls (<code>malloc</code> and <code>free</code> in our example) we want to instrument, we &ldquo;tell&rdquo; <code>Pin</code> which function must be called every time a <code>malloc</code> call is executed.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp">        <span style="color:#007f7f">// Record Malloc size
+</span><span style="color:#007f7f"></span>        RTN_InsertCall(allocRtn, IPOINT_BEFORE, (AFUNPTR)LogBeforeMalloc,
+          IARG_FUNCARG_ENTRYPOINT_VALUE, <span style="color:#ff0;font-weight:bold">0</span>, IARG_END);
+
+        <span style="color:#007f7f">// Record Malloc return address
+</span><span style="color:#007f7f"></span>        RTN_InsertCall(allocRtn, IPOINT_AFTER, (AFUNPTR)LogAfterMalloc,
+          IARG_FUNCRET_EXITPOINT_VALUE, IARG_END);
+</code></pre></div><p>If we look at the code above, we have two calls to <a href="https://software.intel.com/sites/landingpage/pintool/docs/81205/Pin/html/group__RTN__BASIC__API.html#ga76bde295a78d1232fd6ff98a5ff011cf">RTN_InsertCall</a>. In the first, we &ldquo;tell&rdquo; <code>Pin</code> which function must be called before the <code>malloc</code> call. In the second we &ldquo;tell&rdquo; <code>Pin</code> which function must be called after the <code>malloc</code> call. We want to log the allocation sizes and the return value of the <code>malloc</code> call. So, we need both.</p>
+<p>For the <code>free</code> call, we are only interested in its parameter (the address of the memory to free).</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp">RTN_InsertCall(freeRtn, IPOINT_BEFORE, (AFUNPTR)LogFree,
+  IARG_FUNCARG_ENTRYPOINT_VALUE, <span style="color:#ff0;font-weight:bold">0</span>,
+  IARG_END);
+</code></pre></div><p>These three functions are very straightforward. First, before the <code>malloc</code> call we just want to save the size of the memory being allocated.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp">VOID LogBeforeMalloc(ADDRINT size)
+{
+  LogFile &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;[*] malloc(&#34;</span> &lt;&lt; dec &lt;&lt; size &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;)&#34;</span>;
+}
+</code></pre></div><p>After the <code>malloc</code> call, we just want to save the return address. However, as we can see below, we use the <code>map</code> container and by using an <code>iterator</code> we check if the chunk of memory is being allocated for the first time. If yes, we also log it.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp">VOID LogAfterMalloc(ADDRINT addr)
+{
+  <span style="color:#fff;font-weight:bold">if</span> (addr == <span style="color:#fff;font-weight:bold">NULL</span>)
+  {
+    cerr &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;[-] Error: malloc() return value was NULL. Heap full!?!&#34;</span>;
+    <span style="color:#fff;font-weight:bold">return</span>;
+  }
+
+  map&lt;ADDRINT, <span style="color:#fff;font-weight:bold">bool</span>&gt;::iterator it = MallocMap.find(addr);
+
+  <span style="color:#fff;font-weight:bold">if</span> (it != MallocMap.end())
+  {
+    <span style="color:#fff;font-weight:bold">if</span> (it-&gt;second)
+      it-&gt;second = <span style="color:#fff;font-weight:bold">false</span>;
+    <span style="color:#fff;font-weight:bold">else</span>
+      cerr &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;[-] Error: allocating memory not freed!?!&#34;</span> &lt;&lt; endl;
+  }
+  <span style="color:#fff;font-weight:bold">else</span>
+  {
+    MallocMap.insert(pair&lt;ADDRINT, <span style="color:#fff;font-weight:bold">bool</span>&gt;(addr, <span style="color:#fff;font-weight:bold">false</span>));
+    LogFile &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;</span><span style="color:#0ff;font-weight:bold">\t\t</span><span style="color:#0ff;font-weight:bold">= 0x&#34;</span> &lt;&lt; hex &lt;&lt; addr &lt;&lt; endl;
+  }
+}
+</code></pre></div><p>Finally, when we <code>free</code> a chunk of memory we verify if that address was already freed to detect double frees. Plus, if we don&rsquo;t know the address being freed then we are trying to free memory that wasn&rsquo;t allocated before. Which can lead to undefined behavior?</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp">VOID LogFree(ADDRINT addr) 
+{
+  map&lt;ADDRINT, <span style="color:#fff;font-weight:bold">bool</span>&gt;::iterator it = MallocMap.find(addr);
+
+  <span style="color:#fff;font-weight:bold">if</span> (it != MallocMap.end()) 
+  {
+    <span style="color:#fff;font-weight:bold">if</span> (it-&gt;second) 
+      LogFile &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;[*] Memory at address 0x&#34;</span> &lt;&lt; hex &lt;&lt; addr &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34; has been freed more than once.&#34;</span>  &lt;&lt; endl; <span style="color:#007f7f">// Double free
+</span><span style="color:#007f7f"></span>    <span style="color:#fff;font-weight:bold">else</span> 
+    {
+      it-&gt;second = <span style="color:#fff;font-weight:bold">true</span>;    <span style="color:#007f7f">// Mark it as freed
+</span><span style="color:#007f7f"></span>      LogFile &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;[*] free(0x&#34;</span> &lt;&lt; hex &lt;&lt; addr &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;)&#34;</span> &lt;&lt; endl;
+    }
+  }
+  <span style="color:#fff;font-weight:bold">else</span> 
+    LogFile &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;[*] Freeing unallocated memory at address 0x&#34;</span> &lt;&lt; hex &lt;&lt; addr &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;.&#34;</span> &lt;&lt; endl;    <span style="color:#007f7f">// Freeing unallocated memory
+</span><span style="color:#007f7f"></span>}
+</code></pre></div><p>Lastly, we have the call to <code>FinalFunc</code>, which is executed just before the program ends. We basically verify if there&rsquo;s memory that has been allocated but not freed, and we close our log file. The return of this function marks the end of the instrumentation.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp">VOID FinalFunc(INT32 code, VOID *v) 
+{
+  <span style="color:#fff;font-weight:bold">for</span> (pair&lt;ADDRINT, <span style="color:#fff;font-weight:bold">bool</span>&gt; p : MallocMap) 
+  {
+    <span style="color:#fff;font-weight:bold">if</span> (!p.second) 
+      LogFile &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;[*] Memory at address 0x&#34;</span> &lt;&lt; hex &lt;&lt; p.first &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34; allocated but not freed&#34;</span> &lt;&lt; endl;
+  }
+
+  LogFile.close();
+}
+</code></pre></div><p>Simple.</p>
+<p>The whole <code>Pintool</code> code is below. You can also get the whole <code>Visual Studio</code> project from GitLab <a href="https://github.com/houseofxyz/DBI/tree/master/MallocTracer">here</a>.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp"><span style="color:#007f7f">// Built on top of https://software.intel.com/sites/default/files/managed/62/f4/cgo2013.pdf (slide 33)
+</span><span style="color:#007f7f"></span>
+<span style="color:#0f0;font-weight:bold">#include</span> <span style="color:#0f0;font-weight:bold">&#34;pin.h&#34;</span><span style="color:#0f0;font-weight:bold">
+</span><span style="color:#0f0;font-weight:bold">#include</span> <span style="color:#0f0;font-weight:bold">&lt;iostream&gt;</span><span style="color:#0f0;font-weight:bold">
+</span><span style="color:#0f0;font-weight:bold">#include</span> <span style="color:#0f0;font-weight:bold">&lt;fstream&gt;</span><span style="color:#0f0;font-weight:bold">
+</span><span style="color:#0f0;font-weight:bold">#include</span> <span style="color:#0f0;font-weight:bold">&lt;map&gt;</span><span style="color:#0f0;font-weight:bold">
+</span><span style="color:#0f0;font-weight:bold"></span>
+map&lt;ADDRINT, <span style="color:#fff;font-weight:bold">bool</span>&gt; MallocMap;
+ofstream LogFile;
+KNOB&lt;string&gt; LogFileName(KNOB_MODE_WRITEONCE, <span style="color:#0ff;font-weight:bold">&#34;pintool&#34;</span>, <span style="color:#0ff;font-weight:bold">&#34;o&#34;</span>, <span style="color:#0ff;font-weight:bold">&#34;memprofile.out&#34;</span>, <span style="color:#0ff;font-weight:bold">&#34;Memory trace file name&#34;</span>);
+
+VOID LogAfterMalloc(ADDRINT addr)
+{
+  <span style="color:#fff;font-weight:bold">if</span> (addr == <span style="color:#fff;font-weight:bold">NULL</span>)
+  {
+    cerr &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;[-] Error: malloc() return value was NULL. Heap full!?!&#34;</span>;
+    <span style="color:#fff;font-weight:bold">return</span>;
+  }
+
+  map&lt;ADDRINT, <span style="color:#fff;font-weight:bold">bool</span>&gt;::iterator it = MallocMap.find(addr);
+
+  <span style="color:#fff;font-weight:bold">if</span> (it != MallocMap.end())
+  {
+    <span style="color:#fff;font-weight:bold">if</span> (it-&gt;second)
+      it-&gt;second = <span style="color:#fff;font-weight:bold">false</span>;
+    <span style="color:#fff;font-weight:bold">else</span>
+      cerr &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;[-] Error: allocating memory not freed!?!&#34;</span> &lt;&lt; endl;
+  }
+  <span style="color:#fff;font-weight:bold">else</span>
+  {
+    MallocMap.insert(pair&lt;ADDRINT, <span style="color:#fff;font-weight:bold">bool</span>&gt;(addr, <span style="color:#fff;font-weight:bold">false</span>));
+    LogFile &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;</span><span style="color:#0ff;font-weight:bold">\t\t</span><span style="color:#0ff;font-weight:bold">= 0x&#34;</span> &lt;&lt; hex &lt;&lt; addr &lt;&lt; endl;
+  }
+}
+
+VOID LogBeforeMalloc(ADDRINT size)
+{
+  LogFile &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;[*] malloc(&#34;</span> &lt;&lt; dec &lt;&lt; size &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;)&#34;</span>;
+}
+
+VOID LogFree(ADDRINT addr) 
+{
+  map&lt;ADDRINT, <span style="color:#fff;font-weight:bold">bool</span>&gt;::iterator it = MallocMap.find(addr);
+
+  <span style="color:#fff;font-weight:bold">if</span> (it != MallocMap.end()) 
+  {
+    <span style="color:#fff;font-weight:bold">if</span> (it-&gt;second) 
+      LogFile &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;[*] Memory at address 0x&#34;</span> &lt;&lt; hex &lt;&lt; addr &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34; has been freed more than once.&#34;</span>  &lt;&lt; endl; <span style="color:#007f7f">// Double free
+</span><span style="color:#007f7f"></span>    <span style="color:#fff;font-weight:bold">else</span> 
+    {
+      it-&gt;second = <span style="color:#fff;font-weight:bold">true</span>;    <span style="color:#007f7f">// Mark it as freed
+</span><span style="color:#007f7f"></span>      LogFile &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;[*] free(0x&#34;</span> &lt;&lt; hex &lt;&lt; addr &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;)&#34;</span> &lt;&lt; endl;
+    }
+  }
+  <span style="color:#fff;font-weight:bold">else</span> 
+    LogFile &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;[*] Freeing unallocated memory at address 0x&#34;</span> &lt;&lt; hex &lt;&lt; addr &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;.&#34;</span> &lt;&lt; endl;
+}
+
+VOID CustomInstrumentation(IMG img, VOID *v) 
+{
+  <span style="color:#fff;font-weight:bold">for</span> (SYM sym = IMG_RegsymHead(img); SYM_Valid(sym); sym = SYM_Next(sym))
+  {
+    string undFuncName = PIN_UndecorateSymbolName(SYM_Name(sym), UNDECORATION_NAME_ONLY);
+
+    <span style="color:#fff;font-weight:bold">if</span> (undFuncName == <span style="color:#0ff;font-weight:bold">&#34;malloc&#34;</span>)
+    {
+      RTN allocRtn = RTN_FindByAddress(IMG_LowAddress(img) + SYM_Value(sym));
+
+      <span style="color:#fff;font-weight:bold">if</span> (RTN_Valid(allocRtn))
+      {
+        RTN_Open(allocRtn);
+
+        <span style="color:#007f7f">// Record Malloc size
+</span><span style="color:#007f7f"></span>        RTN_InsertCall(allocRtn, IPOINT_BEFORE, (AFUNPTR)LogBeforeMalloc,
+          IARG_FUNCARG_ENTRYPOINT_VALUE, <span style="color:#ff0;font-weight:bold">0</span>, IARG_END);
+
+        <span style="color:#007f7f">// Record Malloc return address
+</span><span style="color:#007f7f"></span>        RTN_InsertCall(allocRtn, IPOINT_AFTER, (AFUNPTR)LogAfterMalloc,
+          IARG_FUNCRET_EXITPOINT_VALUE, IARG_END);
+
+        RTN_Close(allocRtn);
+      }
+    }
+    <span style="color:#fff;font-weight:bold">else</span> <span style="color:#fff;font-weight:bold">if</span> (undFuncName == <span style="color:#0ff;font-weight:bold">&#34;free&#34;</span>)
+    {
+      RTN freeRtn = RTN_FindByAddress(IMG_LowAddress(img) + SYM_Value(sym));
+
+      <span style="color:#fff;font-weight:bold">if</span> (RTN_Valid(freeRtn))
+      {
+        RTN_Open(freeRtn);
+
+        RTN_InsertCall(freeRtn, IPOINT_BEFORE, (AFUNPTR)LogFree,
+          IARG_FUNCARG_ENTRYPOINT_VALUE, <span style="color:#ff0;font-weight:bold">0</span>,
+          IARG_END);
+
+        RTN_Close(freeRtn);
+      }
+    }
+  }
+}
+
+VOID FinalFunc(INT32 code, VOID *v) 
+{
+  <span style="color:#fff;font-weight:bold">for</span> (pair&lt;ADDRINT, <span style="color:#fff;font-weight:bold">bool</span>&gt; p : MallocMap) 
+  {
+    <span style="color:#fff;font-weight:bold">if</span> (!p.second) 
+      LogFile &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;[*] Memory at address 0x&#34;</span> &lt;&lt; hex &lt;&lt; p.first &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34; allocated but not freed&#34;</span> &lt;&lt; endl;
+  }
+
+  LogFile.close();
+}
+
+<span style="color:#fff;font-weight:bold">int</span> main(<span style="color:#fff;font-weight:bold">int</span> argc, <span style="color:#fff;font-weight:bold">char</span> *argv[])
+{
+  PIN_InitSymbols();
+  PIN_Init(argc, argv);
+  LogFile.open(LogFileName.Value().c_str());
+  IMG_AddInstrumentFunction(CustomInstrumentation, <span style="color:#fff;font-weight:bold">NULL</span>);
+  PIN_AddFiniFunction(FinalFunc, <span style="color:#fff;font-weight:bold">NULL</span>);
+  PIN_StartProgram();
+
+  <span style="color:#fff;font-weight:bold">return</span> <span style="color:#ff0;font-weight:bold">0</span>;
+}
+</code></pre></div><p>If you run it against our <code>ExercisePin.exe</code> (see the section <code>Target/Guest Program</code>) binary.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-fallback" data-lang="fallback">C:\pin&gt;pin -t c:\pin\source\tools\MallocTracer\Release\MallocTracer.dll -- ExercisePin.exe
+done
+
+C:\pin&gt;type memprofile.out
+[*] Freeing unallocated memory at address 0x0.
+[*] malloc(2)   = 0x564f68
+[*] malloc(128)   = 0x569b88
+[*] malloc(128)   = 0x569c10
+[*] malloc(128)   = 0x569c98
+[*] free(0x569b88)
+[*] free(0x569c98)
+[*] malloc(2)   = 0x564e78
+[*] Memory at address 0x564e78 allocated but not freed
+[*] Memory at address 0x564f68 allocated but not freed
+[*] Memory at address 0x569c10 allocated but not freed
+</code></pre></div><p>Or, if we pass any data as an argument to our <code>ExercisePin.exe</code>&hellip;</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-fallback" data-lang="fallback">C:\pin&gt;pin.exe -t &#34;C:\pin\source\tools\MallocTracer\Release\MallocTracer.dll&#34; -- C:\TARGET\ExercisePin.exe moo
+
+C:\pin&gt;type memprofile.out
+[*] Freeing unallocated memory at address 0x0.
+[*] malloc(2)   = 0x214f78
+[*] malloc(128)   = 0x218f98
+[*] malloc(128)   = 0x219020
+[*] malloc(128)   = 0x2190a8
+[*] free(0x218f98)
+[*] free(0x2190a8)
+[*] Memory at address 0x2190a8 has been freed more than once (Double Free).
+</code></pre></div><p>As we can see above, our <code>Pintool</code> was able to identify all the issues we were aware of in our test case. That is, <code>invalid free</code>, <code>memory leaks</code>, and a <code>double free</code>. The reason why we don&rsquo;t see the memory leaks in the last output, it&rsquo;s because our binary crashes when the double free happens. The binary was built with <code>Visual Studio</code>, which adds some <code>Heap</code> integrity checks and makes it crash. If you build <code>ExercisePin.exe</code> with <code>gcc</code>, or another compiler, the <code>double free</code> won&rsquo;t be noticed and the program will keep running. However, if you build it with <code>gcc</code>, for example, you&rsquo;ll see many other <code>malloc</code> and <code>free</code> calls from the <code>C Run-Time</code> Library initialization code. Hence, I didn&rsquo;t use <code>gcc</code> to make it easier to follow.</p>
+<h3 id="basic-dynamorio-client-mallocwrap">Basic DynamoRIO client (MallocWrap)</h3>
+<p>We&rsquo;ll create a <code>DynamoRIO client</code> that mimics the <code>Pintool</code> above. That is, we&rsquo;ll log all the <code>malloc</code> and <code>free</code> calls. The same way, the <code>instrumentation</code> is added before and after the <code>malloc</code> call since we want to log the parameter passed to the call and its return value. For the <code>free</code> call, we&rsquo;ll only look at its parameter, and not at its return value. So the instrumentation is only added before the call.</p>
+<p>We&rsquo;ll use the <a href="http://dynamorio.org/docs/page_drwrap.html">drwrap</a> <code>DynamoRIO</code> extension, which provides function wrapping and replacing support, <code>drwrap</code> uses the <a href="http://dynamorio.org/docs/page_drmgr.html">drmgr</a> extension to ensure its events occur at the proper order.</p>
+<p>We start with some &ldquo;standard&rdquo; includes, and to use the <code>DynamoRIO</code> <code>APIs</code> we need to include <code>dr_api.h</code>.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp"><span style="color:#0f0;font-weight:bold">#include</span> <span style="color:#0f0;font-weight:bold">&#34;stdafx.h&#34;</span><span style="color:#0f0;font-weight:bold">
+</span><span style="color:#0f0;font-weight:bold">#include</span> <span style="color:#0f0;font-weight:bold">&lt;fstream&gt;</span><span style="color:#0f0;font-weight:bold">
+</span><span style="color:#0f0;font-weight:bold">#include</span> <span style="color:#0f0;font-weight:bold">&#34;dr_api.h&#34;</span><span style="color:#0f0;font-weight:bold">
+</span><span style="color:#0f0;font-weight:bold">#include</span> <span style="color:#0f0;font-weight:bold">&#34;drmgr.h&#34;</span><span style="color:#0f0;font-weight:bold">
+</span><span style="color:#0f0;font-weight:bold">#include</span> <span style="color:#0f0;font-weight:bold">&#34;drwrap.h&#34;</span><span style="color:#0f0;font-weight:bold">
+</span><span style="color:#0f0;font-weight:bold"></span><span style="color:#fff;font-weight:bold">using</span> <span style="color:#fff;font-weight:bold">namespace</span> std;
+</code></pre></div><p>Additionally, we include the headers for the extensions mentioned above. That is, <code>drmgr.h</code> and <code>drwrap.h</code>. We&rsquo;ll write the output of this <code>DynamoRIO client</code> to a text file, hence the <code>fstream</code> include. I won&rsquo;t use a container in this example to keep track of the memory allocations. You can just copy and paste that functionality from the <code>Pintool</code> above with slight modifications, so I&rsquo;ll leave that for you as an exercise. In this example, we&rsquo;ll simply log <code>malloc</code> and <code>free</code> calls to demonstrate how to use the <code>DynamoRIO</code> <code>API</code> to accomplish the same as before, where we used <code>Pin</code>.</p>
+<p>Then, we have the functions&rsquo; declaration, and some global variables.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp"><span style="color:#fff;font-weight:bold">static</span> <span style="color:#fff;font-weight:bold">void</span> event_exit(<span style="color:#fff;font-weight:bold">void</span>);
+<span style="color:#fff;font-weight:bold">static</span> <span style="color:#fff;font-weight:bold">void</span> wrap_malloc_pre(<span style="color:#fff;font-weight:bold">void</span> *wrapcxt, OUT <span style="color:#fff;font-weight:bold">void</span> **user_data);
+<span style="color:#fff;font-weight:bold">static</span> <span style="color:#fff;font-weight:bold">void</span> wrap_malloc_post(<span style="color:#fff;font-weight:bold">void</span> *wrapcxt, <span style="color:#fff;font-weight:bold">void</span> *user_data);
+<span style="color:#fff;font-weight:bold">static</span> <span style="color:#fff;font-weight:bold">void</span> wrap_free_pre(<span style="color:#fff;font-weight:bold">void</span> *wrapcxt, OUT <span style="color:#fff;font-weight:bold">void</span> **user_data);
+
+ofstream LogFile;
+<span style="color:#0f0;font-weight:bold">#define MALLOC_ROUTINE_NAME &#34;malloc&#34;
+</span><span style="color:#0f0;font-weight:bold">#define FREE_ROUTINE_NAME &#34;free&#34;
+</span></code></pre></div><p>These are all cosmetic, we could have used these <code>#define</code>s in our <code>Pintool</code> too. We didn&rsquo;t, the reason being is&hellip; we don&rsquo;t have to. Feel free to adopt the style you want. I built this example on top of this <a href="http://dynamorio.org/docs/samples/wrap.c">one</a>, so I ended up using more or less the same &ldquo;style&rdquo;. If you plan to port your <code>client</code> or <code>Pintool</code> to other platforms, this can be considered a good practice because it will make the changes easier.</p>
+<p>Next, we have a function called <code>module_load_event</code>, which his a <code>callback</code> function registered by the <a href="http://dynamorio.org/docs/group__drmgr.html#ga3839db2be4269115fdca1bffa5342558">drmgr_register_module_load_event</a>. <code>DynamoRIO</code> will call this function whenever the application loads a module. As you can see, not that different from <code>Pin</code>.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp"><span style="color:#fff;font-weight:bold">static</span> <span style="color:#fff;font-weight:bold">void</span> module_load_event(<span style="color:#fff;font-weight:bold">void</span> *drcontext, <span style="color:#fff;font-weight:bold">const</span> module_data_t *mod, <span style="color:#fff;font-weight:bold">bool</span> loaded)
+{
+  app_pc towrap = (app_pc)dr_get_proc_address(mod-&gt;handle, MALLOC_ROUTINE_NAME);
+  <span style="color:#fff;font-weight:bold">if</span> (towrap != <span style="color:#fff;font-weight:bold">NULL</span>)
+  {
+    <span style="color:#fff;font-weight:bold">bool</span> ok = drwrap_wrap(towrap, wrap_malloc_pre, wrap_malloc_post);
+
+    <span style="color:#fff;font-weight:bold">if</span> (!ok)
+    {
+      dr_fprintf(STDERR, <span style="color:#0ff;font-weight:bold">&#34;[-] Could not wrap &#39;malloc&#39;: already wrapped?</span><span style="color:#0ff;font-weight:bold">\n</span><span style="color:#0ff;font-weight:bold">&#34;</span>);
+      DR_ASSERT(ok);
+    }
+  }
+
+  towrap = (app_pc)dr_get_proc_address(mod-&gt;handle, FREE_ROUTINE_NAME);
+  <span style="color:#fff;font-weight:bold">if</span> (towrap != <span style="color:#fff;font-weight:bold">NULL</span>)
+  {
+    <span style="color:#fff;font-weight:bold">bool</span> ok = drwrap_wrap(towrap, wrap_free_pre, <span style="color:#fff;font-weight:bold">NULL</span>);
+
+    <span style="color:#fff;font-weight:bold">if</span> (!ok)
+    {
+      dr_fprintf(STDERR, <span style="color:#0ff;font-weight:bold">&#34;[-] Could not wrap &#39;free&#39;: already wrapped?</span><span style="color:#0ff;font-weight:bold">\n</span><span style="color:#0ff;font-weight:bold">&#34;</span>);
+      DR_ASSERT(ok);
+    }
+  }
+}
+</code></pre></div><p>As we can see above, we then use <a href="http://dynamorio.org/docs/dr__tools_8h.html#a8da7923ecc4e020e31442bcc8d9f8d3e">dr_get_proc_address</a> to get the entry point of <code>malloc</code>. If it doesn&rsquo;t return <code>NULL</code> (on failure), then we use <a href="http://dynamorio.org/docs/group__drwrap.html#ga4c004987daae07af15f2146c2d7d4b09">drwrap_wrap</a> to wrap the application function by calling <code>wrap_malloc_pre()</code> prior to every invocation of the original function (<code>malloc</code>) and calling <code>wrap_malloc_post()</code> after every invocation of the original function (<code>malloc</code>). Again, conceptually, very close to what we did with <code>Pin</code>.</p>
+<p>We do the same with <code>free</code>. However, as stated before we are only interested in the <code>free</code> parameter and not its return value. So we only wrap the <code>free</code> call prior to every invocation (<code>wrap_free_pre</code>). Since we don&rsquo;t care about its return value we just pass <code>NULL</code> as the third parameter to <code>drwrap_wrap</code>. With <code>drwrap_wrap</code> one of the callbacks can be <code>NULL</code>, but not both.</p>
+<p>We then have the <a href="http://dynamorio.org/docs/dr__api_8h.html#a2b938c98dd186cc94eef6880f9e3c3e9">dr_client_main</a>, which is, let&rsquo;s say, our <code>main</code> function. <code>DynamoRIO</code> looks up <code>dr_client_main</code> in each client library and calls that function when the process starts.</p>
+<p>We have a pretty common &ldquo;main&rdquo;, with calls to <a href="http://dynamorio.org/docs/dr__tools_8h.html#a401eb84af927fa3bd1358f6b639ec592">dr_set_client_name</a> (which sets information presented to users in diagnostic messages), <a href="http://dynamorio.org/docs/dr__tools_8h.html#a332a14861f12823994465e8c9b6a3015">dr_log</a> (which simply writes to <code>DynamoRIO</code>'s log file), and a couple of functions that you can guess what they do by its name.</p>
+<p>Additionally, <a href="http://dynamorio.org/docs/group__drmgr.html#ga07ab03a2182247922f756778d18bb3fd">drmgr_init</a>, and <a href="http://dynamorio.org/docs/group__drwrap.html#ga23837833101ebc340ac7de6e8340bb4a">drwrap_init</a>, initialize the respective extensions. The <a href="http://dynamorio.org/docs/dr__events_8h.html#a985537df683007e1392e8a3b095ef363">dr_register_exit_event</a> is pretty much the same as the <code>Pin</code> <code>PIN_AddFiniFunction</code>, which is a call to a function to be executed immediately before the application exits.</p>
+<p>Lastly, we have the call to <code>drmgr_register_module_load_event</code> that we already mentioned above.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp">DR_EXPORT <span style="color:#fff;font-weight:bold">void</span> dr_client_main(client_id_t id, <span style="color:#fff;font-weight:bold">int</span> argc, <span style="color:#fff;font-weight:bold">const</span> <span style="color:#fff;font-weight:bold">char</span> *argv[])
+{
+  LogFile.open(<span style="color:#0ff;font-weight:bold">&#34;memprofile.out&#34;</span>);
+
+  dr_set_client_name(<span style="color:#0ff;font-weight:bold">&#34;DynamoRIO Sample Client &#39;wrap&#39;&#34;</span>, <span style="color:#0ff;font-weight:bold">&#34;http://dynamorio.org/issues&#34;</span>);
+  dr_log(<span style="color:#fff;font-weight:bold">NULL</span>, LOG_ALL, <span style="color:#ff0;font-weight:bold">1</span>, <span style="color:#0ff;font-weight:bold">&#34;Client &#39;wrap&#39; initializing</span><span style="color:#0ff;font-weight:bold">\n</span><span style="color:#0ff;font-weight:bold">&#34;</span>);
+
+  <span style="color:#fff;font-weight:bold">if</span> (dr_is_notify_on()) 
+  {
+    dr_enable_console_printing();
+    dr_fprintf(STDERR, <span style="color:#0ff;font-weight:bold">&#34;[*] Client wrap is running</span><span style="color:#0ff;font-weight:bold">\n</span><span style="color:#0ff;font-weight:bold">&#34;</span>);
+  }
+
+  drmgr_init();
+  drwrap_init();
+  dr_register_exit_event(event_exit);
+  drmgr_register_module_load_event(module_load_event);
+}
+</code></pre></div><p>The function to be executed immediately before the application exits. Nothing special here.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp"><span style="color:#fff;font-weight:bold">static</span> <span style="color:#fff;font-weight:bold">void</span> event_exit(<span style="color:#fff;font-weight:bold">void</span>)
+{
+  drwrap_exit();
+  drmgr_exit();
+}
+</code></pre></div><p>And lastly, the <code>callback</code> functions already mentioned before. What&rsquo;s relevant here? The call <a href="http://dynamorio.org/docs/group__drwrap.html#ga3d0864daf1ec37a91640a739f8928b83">drwrap_get_arg</a>, that as we can guess <em>&ldquo;Returns the value of the arg-th argument (0-based) to the wrapped function represented by wrapcxt. Assumes the regular C calling convention (i.e., no fastcall). May only be called from a drwrap_wrap pre-function callback. To access argument values in a post-function callback, store them in the user_data parameter passed between the pre and post functions.&quot;</em>. And the call <a href="http://dynamorio.org/docs/group__drwrap.html#gae993f55e025cf80ae67ed398b35a1b61">drwrap_get_retval</a>, which obviously returns the return value of the wrapped function.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp"><span style="color:#fff;font-weight:bold">static</span> <span style="color:#fff;font-weight:bold">void</span> wrap_malloc_pre(<span style="color:#fff;font-weight:bold">void</span> *wrapcxt, OUT <span style="color:#fff;font-weight:bold">void</span> **user_data)
+{
+  <span style="color:#007f7f">/* malloc(size) or HeapAlloc(heap, flags, size) */</span>
+  <span style="color:#007f7f">//size_t sz = (size_t)drwrap_get_arg(wrapcxt, 2); // HeapAlloc
+</span><span style="color:#007f7f"></span>  size_t sz = (size_t)drwrap_get_arg(wrapcxt, <span style="color:#ff0;font-weight:bold">0</span>); <span style="color:#007f7f">// malloc
+</span><span style="color:#007f7f"></span>
+  LogFile &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;[*] malloc(&#34;</span> &lt;&lt; dec &lt;&lt; sz &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;)&#34;</span>; <span style="color:#007f7f">// log the malloc size
+</span><span style="color:#007f7f"></span>}
+
+<span style="color:#fff;font-weight:bold">static</span> <span style="color:#fff;font-weight:bold">void</span> wrap_malloc_post(<span style="color:#fff;font-weight:bold">void</span> *wrapcxt, <span style="color:#fff;font-weight:bold">void</span> *user_data)
+{
+  <span style="color:#fff;font-weight:bold">int</span> actual_read = (<span style="color:#fff;font-weight:bold">int</span>)(ptr_int_t)drwrap_get_retval(wrapcxt);
+  LogFile &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;</span><span style="color:#0ff;font-weight:bold">\t\t</span><span style="color:#0ff;font-weight:bold">= 0x&#34;</span> &lt;&lt; hex &lt;&lt; actual_read &lt;&lt; endl;
+}
+
+<span style="color:#fff;font-weight:bold">static</span> <span style="color:#fff;font-weight:bold">void</span> wrap_free_pre(<span style="color:#fff;font-weight:bold">void</span> *wrapcxt, OUT <span style="color:#fff;font-weight:bold">void</span> **user_data)
+{
+  <span style="color:#fff;font-weight:bold">int</span> addr = (<span style="color:#fff;font-weight:bold">int</span>)drwrap_get_arg(wrapcxt, <span style="color:#ff0;font-weight:bold">0</span>);
+  LogFile &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;[*] free(0x&#34;</span> &lt;&lt; hex &lt;&lt; addr &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;)&#34;</span> &lt;&lt; endl;
+}
+</code></pre></div><p>Very simple, and not that different from what we have seen before with <code>Pin</code>.</p>
+<p>The whole <code>DynamoRIO client</code> code is below. You can also get the whole <code>Visual Studio</code> project from GitLab <a href="https://github.com/houseofxyz/DBI/tree/master/MallocWrap">here</a>.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp"><span style="color:#0f0;font-weight:bold">#include</span> <span style="color:#0f0;font-weight:bold">&#34;stdafx.h&#34;</span><span style="color:#0f0;font-weight:bold">
+</span><span style="color:#0f0;font-weight:bold">#include</span> <span style="color:#0f0;font-weight:bold">&lt;fstream&gt;</span><span style="color:#0f0;font-weight:bold">
+</span><span style="color:#0f0;font-weight:bold">#include</span> <span style="color:#0f0;font-weight:bold">&#34;dr_api.h&#34;</span><span style="color:#0f0;font-weight:bold">
+</span><span style="color:#0f0;font-weight:bold">#include</span> <span style="color:#0f0;font-weight:bold">&#34;drmgr.h&#34;</span><span style="color:#0f0;font-weight:bold">
+</span><span style="color:#0f0;font-weight:bold">#include</span> <span style="color:#0f0;font-weight:bold">&#34;drwrap.h&#34;</span><span style="color:#0f0;font-weight:bold">
+</span><span style="color:#0f0;font-weight:bold"></span><span style="color:#fff;font-weight:bold">using</span> <span style="color:#fff;font-weight:bold">namespace</span> std;
+
+<span style="color:#fff;font-weight:bold">static</span> <span style="color:#fff;font-weight:bold">void</span> event_exit(<span style="color:#fff;font-weight:bold">void</span>);
+<span style="color:#fff;font-weight:bold">static</span> <span style="color:#fff;font-weight:bold">void</span> wrap_malloc_pre(<span style="color:#fff;font-weight:bold">void</span> *wrapcxt, OUT <span style="color:#fff;font-weight:bold">void</span> **user_data);
+<span style="color:#fff;font-weight:bold">static</span> <span style="color:#fff;font-weight:bold">void</span> wrap_malloc_post(<span style="color:#fff;font-weight:bold">void</span> *wrapcxt, <span style="color:#fff;font-weight:bold">void</span> *user_data);
+<span style="color:#fff;font-weight:bold">static</span> <span style="color:#fff;font-weight:bold">void</span> wrap_free_pre(<span style="color:#fff;font-weight:bold">void</span> *wrapcxt, OUT <span style="color:#fff;font-weight:bold">void</span> **user_data);
+
+ofstream LogFile;
+<span style="color:#0f0;font-weight:bold">#define MALLOC_ROUTINE_NAME &#34;malloc&#34;
+</span><span style="color:#0f0;font-weight:bold">#define FREE_ROUTINE_NAME &#34;free&#34;
+</span><span style="color:#0f0;font-weight:bold"></span>
+<span style="color:#fff;font-weight:bold">static</span> <span style="color:#fff;font-weight:bold">void</span> module_load_event(<span style="color:#fff;font-weight:bold">void</span> *drcontext, <span style="color:#fff;font-weight:bold">const</span> module_data_t *mod, <span style="color:#fff;font-weight:bold">bool</span> loaded)
+{
+  app_pc towrap = (app_pc)dr_get_proc_address(mod-&gt;handle, MALLOC_ROUTINE_NAME);
+  <span style="color:#fff;font-weight:bold">if</span> (towrap != <span style="color:#fff;font-weight:bold">NULL</span>)
+  {
+    <span style="color:#fff;font-weight:bold">bool</span> ok = drwrap_wrap(towrap, wrap_malloc_pre, wrap_malloc_post);
+
+    <span style="color:#fff;font-weight:bold">if</span> (!ok)
+    {
+      dr_fprintf(STDERR, <span style="color:#0ff;font-weight:bold">&#34;[-] Could not wrap &#39;malloc&#39;: already wrapped?</span><span style="color:#0ff;font-weight:bold">\n</span><span style="color:#0ff;font-weight:bold">&#34;</span>);
+      DR_ASSERT(ok);
+    }
+  }
+
+  towrap = (app_pc)dr_get_proc_address(mod-&gt;handle, FREE_ROUTINE_NAME);
+  <span style="color:#fff;font-weight:bold">if</span> (towrap != <span style="color:#fff;font-weight:bold">NULL</span>)
+  {
+    <span style="color:#fff;font-weight:bold">bool</span> ok = drwrap_wrap(towrap, wrap_free_pre, <span style="color:#fff;font-weight:bold">NULL</span>);
+
+    <span style="color:#fff;font-weight:bold">if</span> (!ok)
+    {
+      dr_fprintf(STDERR, <span style="color:#0ff;font-weight:bold">&#34;[-] Could not wrap &#39;free&#39;: already wrapped?</span><span style="color:#0ff;font-weight:bold">\n</span><span style="color:#0ff;font-weight:bold">&#34;</span>);
+      DR_ASSERT(ok);
+    }
+  }
+}
+
+DR_EXPORT <span style="color:#fff;font-weight:bold">void</span> dr_client_main(client_id_t id, <span style="color:#fff;font-weight:bold">int</span> argc, <span style="color:#fff;font-weight:bold">const</span> <span style="color:#fff;font-weight:bold">char</span> *argv[])
+{
+  LogFile.open(<span style="color:#0ff;font-weight:bold">&#34;memprofile.out&#34;</span>);
+
+  dr_set_client_name(<span style="color:#0ff;font-weight:bold">&#34;DynamoRIO Sample Client &#39;wrap&#39;&#34;</span>, <span style="color:#0ff;font-weight:bold">&#34;http://dynamorio.org/issues&#34;</span>);
+  dr_log(<span style="color:#fff;font-weight:bold">NULL</span>, LOG_ALL, <span style="color:#ff0;font-weight:bold">1</span>, <span style="color:#0ff;font-weight:bold">&#34;Client &#39;wrap&#39; initializing</span><span style="color:#0ff;font-weight:bold">\n</span><span style="color:#0ff;font-weight:bold">&#34;</span>);
+
+  <span style="color:#fff;font-weight:bold">if</span> (dr_is_notify_on()) 
+  {
+    dr_enable_console_printing();
+    dr_fprintf(STDERR, <span style="color:#0ff;font-weight:bold">&#34;[*] Client wrap is running</span><span style="color:#0ff;font-weight:bold">\n</span><span style="color:#0ff;font-weight:bold">&#34;</span>);
+  }
+
+  drmgr_init();
+  drwrap_init();
+  dr_register_exit_event(event_exit);
+  drmgr_register_module_load_event(module_load_event);
+}
+
+<span style="color:#fff;font-weight:bold">static</span> <span style="color:#fff;font-weight:bold">void</span> event_exit(<span style="color:#fff;font-weight:bold">void</span>)
+{
+  drwrap_exit();
+  drmgr_exit();
+}
+
+<span style="color:#fff;font-weight:bold">static</span> <span style="color:#fff;font-weight:bold">void</span> wrap_malloc_pre(<span style="color:#fff;font-weight:bold">void</span> *wrapcxt, OUT <span style="color:#fff;font-weight:bold">void</span> **user_data)
+{
+  <span style="color:#007f7f">/* malloc(size) or HeapAlloc(heap, flags, size) */</span>
+  <span style="color:#007f7f">//size_t sz = (size_t)drwrap_get_arg(wrapcxt, 2); // HeapAlloc
+</span><span style="color:#007f7f"></span>  size_t sz = (size_t)drwrap_get_arg(wrapcxt, <span style="color:#ff0;font-weight:bold">0</span>); <span style="color:#007f7f">// malloc
+</span><span style="color:#007f7f"></span>
+  LogFile &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;[*] malloc(&#34;</span> &lt;&lt; dec &lt;&lt; sz &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;)&#34;</span>; <span style="color:#007f7f">// log the malloc size
+</span><span style="color:#007f7f"></span>}
+
+<span style="color:#fff;font-weight:bold">static</span> <span style="color:#fff;font-weight:bold">void</span> wrap_malloc_post(<span style="color:#fff;font-weight:bold">void</span> *wrapcxt, <span style="color:#fff;font-weight:bold">void</span> *user_data)
+{
+  <span style="color:#fff;font-weight:bold">int</span> actual_read = (<span style="color:#fff;font-weight:bold">int</span>)(ptr_int_t)drwrap_get_retval(wrapcxt);
+  LogFile &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;</span><span style="color:#0ff;font-weight:bold">\t\t</span><span style="color:#0ff;font-weight:bold">= 0x&#34;</span> &lt;&lt; hex &lt;&lt; actual_read &lt;&lt; endl;
+}
+
+<span style="color:#fff;font-weight:bold">static</span> <span style="color:#fff;font-weight:bold">void</span> wrap_free_pre(<span style="color:#fff;font-weight:bold">void</span> *wrapcxt, OUT <span style="color:#fff;font-weight:bold">void</span> **user_data)
+{
+  <span style="color:#fff;font-weight:bold">int</span> addr = (<span style="color:#fff;font-weight:bold">int</span>)drwrap_get_arg(wrapcxt, <span style="color:#ff0;font-weight:bold">0</span>);
+  LogFile &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;[*] free(0x&#34;</span> &lt;&lt; hex &lt;&lt; addr &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;)&#34;</span> &lt;&lt; endl;
+}
+</code></pre></div><p>If you run it against our <code>ExercisePin.exe</code> (see the section <code>Target/Guest Program</code>) binary.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-fallback" data-lang="fallback">C:\dynamorio\bin32&gt;drrun.exe -client &#34;C:\Users\bob\Desktop\WRKDIR\MallocWrap\Release\MallocWrap.dll&#34; 0 &#34;&#34; c:\Users\bob\Desktop\ExercisePin.exe
+[*] Client wrap is running
+done
+C:\dynamorio\bin32&gt;type memprofile.out
+[*] free(0x0)
+[*] malloc(2)   = 0x5a35d0
+[*] malloc(128)   = 0x5a9c50
+[*] malloc(128)   = 0x5a9cd8
+[*] malloc(128)   = 0x5a9d60
+[*] free(0x5a9c50)
+[*] free(0x5a9d60)
+[*] malloc(2)   = 0x5a34e0
+</code></pre></div><p>We can extend this program to get the exact same functionality as our <code>Pintool</code> and check for memory corruption bugs instead of logging the calls only. I&rsquo;ll leave that as an exercise for you.</p>
+<h2 id="basic-frida-script-malloclogger">Basic Frida script (MallocLogger)</h2>
+<p><code>Frida</code> is a fast-growing <code>DBI</code> framework, mainly used in mobile devices. I haven&rsquo;t played much with mobile applications in a long time (it&rsquo;s about to change though), still, I wanted to give <code>Frida</code> a try because I heard good things about it, and it also supports <code>Windows</code>. The interesting part here is that <code>Frida</code> injects a <code>JavaScript</code> interpreter in the target/guest program. So, instead of writing <code>C</code> code, we&rsquo;ll be writing <code>JavaScript</code> to instrument our program (actually, if we want we can also use <code>C</code> or <code>Swift</code>). You can see this as an advantage, or disadvantage. If you are a vulnerability hunter, and you like to poke around browsers then this should be an advantage, I guess. It&rsquo;s actually very interesting that we are writing <code>instrumentation</code> code to manipulate low-level instructions by using a high-level language.</p>
+<p>You can find the <code>JavaScript API</code> <a href="https://www.frida.re/docs/javascript-api/">here</a>. Anyway, the use case will be exactly the same as the ones we saw before.</p>
+<p>While the <code>instrumentation</code> code has to be written in <code>JavaScript</code> (well, again, that&rsquo;s not true but let&rsquo;s use <code>JavaScript</code> because it&rsquo;s cool), the resulting tools can be written in either <code>Python</code> or <code>JavaScript</code>.</p>
+<p>We&rsquo;ll use Frida&rsquo;s <code>Interceptor</code> to <code>trace</code> all <code>malloc</code> and <code>free</code> calls for a start. The target will be our <code>ExercisePin.exe</code> binary again. We&rsquo;ll also try to create an output close to the one of our basic <code>MallocTracer</code> <code>Pintool</code>, and <code>MallocWrap</code> <code>DynamoRIO client</code>. Which means we&rsquo;ll log the amount of memory requested, the return address of <code>malloc</code> and the argument of <code>free</code>.</p>
+<p>Here&rsquo;s the sample <code>MallocLogger.py</code> <code>Python</code> script.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp"><span style="color:#0f0;font-weight:bold">#!/usr/bin/env python
+</span><span style="color:#0f0;font-weight:bold"></span>import frida
+import sys
+
+pid = frida.spawn([<span style="color:#f00">&#39;</span>ExercisePin.exe<span style="color:#f00">&#39;</span>])
+session = frida.attach(pid)
+
+contents = open(<span style="color:#f00">&#39;</span>mallocLogger.js<span style="color:#f00">&#39;</span>).read()
+script = session.create_script(contents)
+script.load()
+frida.resume(pid)
+sys.stdin.read()
+</code></pre></div><p>And below is the instrumentation <code>JavaScript</code> file, <code>MallocLogger.js</code>.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp"><span style="color:#007f7f">// Interceptor for &#39;malloc&#39;
+</span><span style="color:#007f7f"></span>Interceptor.attach(Module.findExportByName(null, <span style="color:#f00">&#39;</span>malloc<span style="color:#f00">&#39;</span>),
+    {
+      <span style="color:#007f7f">// Log before malloc
+</span><span style="color:#007f7f"></span>      onEnter: function (args) {
+        console.log(<span style="color:#0ff;font-weight:bold">&#34;malloc(&#34;</span> + args[<span style="color:#ff0;font-weight:bold">0</span>].toInt32() + <span style="color:#0ff;font-weight:bold">&#34;)&#34;</span>);
+      },
+      <span style="color:#007f7f">// Log after malloc
+</span><span style="color:#007f7f"></span>      onLeave: function (retval) {
+        console.log(<span style="color:#0ff;font-weight:bold">&#34;</span><span style="color:#0ff;font-weight:bold">\t\t</span><span style="color:#0ff;font-weight:bold">= 0x&#34;</span> + retval.toString(<span style="color:#ff0;font-weight:bold">16</span>));
+      }
+    });
+
+<span style="color:#007f7f">// Interceptor for &#39;free&#39;
+</span><span style="color:#007f7f"></span>Interceptor.attach(Module.findExportByName(null, <span style="color:#f00">&#39;</span>free<span style="color:#f00">&#39;</span>),
+    {
+      onEnter: function (args) {
+        console.log(<span style="color:#0ff;font-weight:bold">&#34;free(0x&#34;</span> + args[<span style="color:#ff0;font-weight:bold">0</span>].toString(<span style="color:#ff0;font-weight:bold">16</span>) + <span style="color:#0ff;font-weight:bold">&#34;)&#34;</span>);
+      }
+    });
+</code></pre></div><p>If we run this <code>Python</code> script we get something like.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-fallback" data-lang="fallback">C:\Users\bob\Desktop\frida&gt;python MallocLogger.py
+free(0x0)
+malloc(2)
+                = 0x984268
+malloc(128)
+                = 0x9856d8
+malloc(128)
+                = 0x985760
+malloc(128)
+                = 0x9857e8
+done
+free(0x9856d8)
+free(0x9857e8)
+malloc(2)
+                = 0x984278
+</code></pre></div><p>Interestingly enough, <code>Frida</code> also comes with an utility <code>frida-trace.exe</code> that pretty much allows us to do the exact same thing we did above without writing almost any code (besides adding a bit more of information and tweaking the output).</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-fallback" data-lang="fallback">C:\Users\bob\Desktop\frida&gt;frida-trace -i malloc -i free .\ExercisePin.exe
+Instrumenting functions...
+malloc: Auto-generated handler at &#34;C:\Users\bob\Desktop\frida\tmp\__handlers__\msvcrt.dll\malloc.js&#34;
+malloc: Auto-generated handler at &#34;C:\Users\bob\Desktop\frida\tmp\__handlers__\ucrtbase.DLL\malloc.js&#34;
+free: Auto-generated handler at &#34;C:\Users\bob\Desktop\frida\tmp\__handlers__\msvcrt.dll\free.js&#34;
+free: Auto-generated handler at &#34;C:\Users\bob\Desktop\frida\tmp\__handlers__\ucrtbase.DLL\free.js&#34;
+Started tracing 4 functions. Press Ctrl+C to stop.
+done
+           /* TID 0x1f84 */
+   125 ms  free()
+   125 ms  malloc()
+   125 ms  malloc()
+   125 ms  malloc()
+   125 ms  malloc()
+   125 ms  free()
+   125 ms  free()
+   125 ms  malloc()
+Process terminated
+</code></pre></div><p>If you look at the output above you can see that some <code>JavaScript</code> handlers were auto-generated. We can just tweak this <code>JavaScript</code> code to make the output look as before. If we open for example the file <code>__handlers__\msvcrt.dll\malloc.js</code> we&rsquo;ll see something like:</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp"><span style="color:#007f7f">/*
+</span><span style="color:#007f7f"> * Auto-generated by Frida. Please modify to match the signature of malloc.
+</span><span style="color:#007f7f"> * This stub is currently auto-generated from manpages when available.
+</span><span style="color:#007f7f"> *
+</span><span style="color:#007f7f"> * For full API reference, see: http://www.frida.re/docs/javascript-api/
+</span><span style="color:#007f7f"> */</span>
+
+{
+  <span style="color:#007f7f">/**
+</span><span style="color:#007f7f">   * Called synchronously when about to call malloc.
+</span><span style="color:#007f7f">   *
+</span><span style="color:#007f7f">   * @this {object} - Object allowing you to store state for use in onLeave.
+</span><span style="color:#007f7f">   * @param {function} log - Call this function with a string to be presented to the user.
+</span><span style="color:#007f7f">   * @param {array} args - Function arguments represented as an array of NativePointer objects.
+</span><span style="color:#007f7f">   * For example use Memory.readUtf8String(args[0]) if the first argument is a pointer to a C string encoded as UTF-8.
+</span><span style="color:#007f7f">   * It is also possible to modify arguments by assigning a NativePointer object to an element of this array.
+</span><span style="color:#007f7f">   * @param {object} state - Object allowing you to keep state across function calls.
+</span><span style="color:#007f7f">   * Only one JavaScript function will execute at a time, so do not worry about race-conditions.
+</span><span style="color:#007f7f">   * However, do not use this to store function arguments across onEnter/onLeave, but instead
+</span><span style="color:#007f7f">   * use &#34;this&#34; which is an object for keeping state local to an invocation.
+</span><span style="color:#007f7f">   */</span>
+  onEnter: function (log, args, state) {
+    log(<span style="color:#0ff;font-weight:bold">&#34;malloc()&#34;</span>);
+  },
+
+  <span style="color:#007f7f">/**
+</span><span style="color:#007f7f">   * Called synchronously when about to return from malloc.
+</span><span style="color:#007f7f">   *
+</span><span style="color:#007f7f">   * See onEnter for details.
+</span><span style="color:#007f7f">   *
+</span><span style="color:#007f7f">   * @this {object} - Object allowing you to access state stored in onEnter.
+</span><span style="color:#007f7f">   * @param {function} log - Call this function with a string to be presented to the user.
+</span><span style="color:#007f7f">   * @param {NativePointer} retval - Return value represented as a NativePointer object.
+</span><span style="color:#007f7f">   * @param {object} state - Object allowing you to keep state across function calls.
+</span><span style="color:#007f7f">   */</span>
+  onLeave: function (log, retval, state) {
+  }
+}
+</code></pre></div><p>We just need to tweak the <code>onEnter</code> and <code>onLeave</code> functions. For example.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp"><span style="color:#007f7f">/*
+</span><span style="color:#007f7f"> * Auto-generated by Frida. Please modify to match the signature of malloc.
+</span><span style="color:#007f7f"> * This stub is currently auto-generated from manpages when available.
+</span><span style="color:#007f7f"> *
+</span><span style="color:#007f7f"> * For full API reference, see: http://www.frida.re/docs/javascript-api/
+</span><span style="color:#007f7f"> */</span>
+
+{
+  <span style="color:#007f7f">/**
+</span><span style="color:#007f7f">   * Called synchronously when about to call malloc.
+</span><span style="color:#007f7f">   *
+</span><span style="color:#007f7f">   * @this {object} - Object allowing you to store state for use in onLeave.
+</span><span style="color:#007f7f">   * @param {function} log - Call this function with a string to be presented to the user.
+</span><span style="color:#007f7f">   * @param {array} args - Function arguments represented as an array of NativePointer objects.
+</span><span style="color:#007f7f">   * For example use Memory.readUtf8String(args[0]) if the first argument is a pointer to a C string encoded as UTF-8.
+</span><span style="color:#007f7f">   * It is also possible to modify arguments by assigning a NativePointer object to an element of this array.
+</span><span style="color:#007f7f">   * @param {object} state - Object allowing you to keep state across function calls.
+</span><span style="color:#007f7f">   * Only one JavaScript function will execute at a time, so do not worry about race-conditions.
+</span><span style="color:#007f7f">   * However, do not use this to store function arguments across onEnter/onLeave, but instead
+</span><span style="color:#007f7f">   * use &#34;this&#34; which is an object for keeping state local to an invocation.
+</span><span style="color:#007f7f">   */</span>
+  onEnter: function (log, args, state) {
+    log(<span style="color:#0ff;font-weight:bold">&#34;malloc(&#34;</span> + args[<span style="color:#ff0;font-weight:bold">0</span>].toInt32() + <span style="color:#0ff;font-weight:bold">&#34;)&#34;</span>);
+  },
+
+  <span style="color:#007f7f">/**
+</span><span style="color:#007f7f">   * Called synchronously when about to return from malloc.
+</span><span style="color:#007f7f">   *
+</span><span style="color:#007f7f">   * See onEnter for details.
+</span><span style="color:#007f7f">   *
+</span><span style="color:#007f7f">   * @this {object} - Object allowing you to access state stored in onEnter.
+</span><span style="color:#007f7f">   * @param {function} log - Call this function with a string to be presented to the user.
+</span><span style="color:#007f7f">   * @param {NativePointer} retval - Return value represented as a NativePointer object.
+</span><span style="color:#007f7f">   * @param {object} state - Object allowing you to keep state across function calls.
+</span><span style="color:#007f7f">   */</span>
+  onLeave: function (log, retval, state) {
+    log(<span style="color:#0ff;font-weight:bold">&#34;</span><span style="color:#0ff;font-weight:bold">\t\t</span><span style="color:#0ff;font-weight:bold">= 0x&#34;</span> + retval.toString(<span style="color:#ff0;font-weight:bold">16</span>));
+  }
+}
+</code></pre></div><p>Now, if we run again the exact same command as before we&rsquo;ll get the following.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-fallback" data-lang="fallback">C:\Users\bob\Desktop\frida&gt;frida-trace -i malloc -i free .\ExercisePin.exe
+Instrumenting functions...
+malloc: Loaded handler at &#34;C:\Users\bob\Desktop\frida\tmp\__handlers__\msvcrt.dll\malloc.js&#34;
+malloc: Loaded handler at &#34;C:\Users\bob\Desktop\frida\tmp\__handlers__\ucrtbase.DLL\malloc.js&#34;
+free: Loaded handler at &#34;C:\Users\bob\Desktop\frida\tmp\__handlers__\msvcrt.dll\free.js&#34;
+free: Loaded handler at &#34;C:\Users\bob\Desktop\frida\tmp\__handlers__\ucrtbase.DLL\free.js&#34;
+Started tracing 4 functions. Press Ctrl+C to stop.
+done
+           /* TID 0x23e4 */
+    64 ms  free(0x0)
+    64 ms  malloc(2)
+    64 ms               = 0x8a42a8
+    64 ms  malloc(128)
+    64 ms               = 0x8a57a0
+    64 ms  malloc(128)
+    64 ms               = 0x8a5828
+    64 ms  malloc(128)
+    64 ms               = 0x8a58b0
+    64 ms  free(0x8a57a0)
+    64 ms  free(0x8a58b0)
+    65 ms  malloc(2)
+    65 ms               = 0x8a42b8
+Process terminated
+</code></pre></div><p>We can extend this program to get the exact same functionality as our <code>Pintool</code>,  and check for memory corruption bugs instead of logging the calls only. I&rsquo;ll leave that as an exercise for you.</p>
+<h2 id="debugging">Debugging</h2>
+<p>If you want to debug your <code>Pintool</code> you should use the <code>-pause_tool</code> switch and specify the number of seconds to wait until you attach the debugger to its process. See below how.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-fallback" data-lang="fallback">C:\pin\source\tools\MallocTracer\Release&gt;c:\pin\pin.exe -pause_tool 20 -t &#34;C:\pin\source\tools\MallocTracer\Release\MallocTracer.dll&#34; -- ExercisePin.exe
+Pausing for 20 seconds to attach to process with pid 1568
+</code></pre></div><p>For debugging of the <code>Pintool</code> I actually don&rsquo;t use <code>Visual Studio</code>, I prefer to use <code>WinDbg</code> because I&rsquo;m used to it and it is awesome. Once you attach to the process with <code>WinDbg</code> it&rsquo;s very easy to set up a <code>breakpoint</code> wherever you like in your <code>Pintool</code>. Below is just a simple example of setting a <code>breakpoint</code> in the <code>main</code> function of my <code>Pintool</code>.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp">Microsoft (R) Windows Debugger Version <span style="color:#ff0;font-weight:bold">10.0.17134.12</span> X86
+Copyright (c) Microsoft Corporation. All rights reserved.
+
+*** wait with pending attach
+Symbol search path is: srv*
+Executable search path is: 
+ModLoad: <span style="color:#ff0;font-weight:bold">000</span><span style="color:#ff0;font-weight:bold">80000</span> <span style="color:#ff0;font-weight:bold">000</span><span style="color:#ff0;font-weight:bold">87000</span>   C:<span style="color:#f00">\</span>pin<span style="color:#f00">\</span>source<span style="color:#f00">\</span>tools<span style="color:#f00">\</span>MallocTracer<span style="color:#f00">\</span>Release<span style="color:#f00">\</span>ExercisePin.exe
+ModLoad: <span style="color:#ff0;font-weight:bold">77800000</span> <span style="color:#ff0;font-weight:bold">77980000</span>   C:<span style="color:#f00">\</span>Windows<span style="color:#f00">\</span>SysWOW64<span style="color:#f00">\</span>ntdll.dll
+ModLoad: <span style="color:#ff0;font-weight:bold">769</span>d0000 <span style="color:#ff0;font-weight:bold">76</span>ae0000   C:<span style="color:#f00">\</span>Windows<span style="color:#f00">\</span>syswow64<span style="color:#f00">\</span>kernel32.dll
+ModLoad: <span style="color:#ff0;font-weight:bold">76</span>b50000 <span style="color:#ff0;font-weight:bold">76</span>b97000   C:<span style="color:#f00">\</span>Windows<span style="color:#f00">\</span>syswow64<span style="color:#f00">\</span>KERNELBASE.dll
+Break-in sent, waiting <span style="color:#ff0;font-weight:bold">30</span> seconds...
+ModLoad: <span style="color:#ff0;font-weight:bold">54</span>c20000 <span style="color:#ff0;font-weight:bold">54f</span><span style="color:#ff0;font-weight:bold">93000</span>   MallocTracer.dll
+It is now possible to set breakpoints in Pin tool.
+Use <span style="color:#0ff;font-weight:bold">&#34;Go&#34;</span> command (F5) to proceed.
+(<span style="color:#ff0;font-weight:bold">620.12</span>c0): Break instruction exception - code <span style="color:#ff0;font-weight:bold">80000003</span> (first chance)
+eax=<span style="color:#ff0;font-weight:bold">00000000</span> ebx=<span style="color:#ff0;font-weight:bold">53833</span>c8c ecx=<span style="color:#ff0;font-weight:bold">76</span>b6388e edx=<span style="color:#ff0;font-weight:bold">00000000</span> esi=<span style="color:#ff0;font-weight:bold">53833</span>c8c edi=<span style="color:#ff0;font-weight:bold">53833</span>cb8
+eip=<span style="color:#ff0;font-weight:bold">76</span>b6338d esp=<span style="color:#ff0;font-weight:bold">01</span>ad1930 ebp=<span style="color:#ff0;font-weight:bold">0042e7</span>e4 iopl=<span style="color:#ff0;font-weight:bold">0</span>         nv up ei pl zr na pe nc
+cs=<span style="color:#ff0;font-weight:bold">0023</span>  ss=<span style="color:#ff0;font-weight:bold">002</span>b  ds=<span style="color:#ff0;font-weight:bold">002</span>b  es=<span style="color:#ff0;font-weight:bold">002</span>b  fs=<span style="color:#ff0;font-weight:bold">0053</span>  gs=<span style="color:#ff0;font-weight:bold">002</span>b             efl=<span style="color:#ff0;font-weight:bold">00000246</span>
+KERNELBASE!DebugBreak+<span style="color:#ff0;font-weight:bold">0x2</span>:
+<span style="color:#ff0;font-weight:bold">76</span>b6338d cc              <span style="color:#fff;font-weight:bold">int</span>     <span style="color:#ff0;font-weight:bold">3</span>
+<span style="color:#ff0;font-weight:bold">0</span>:<span style="color:#ff0;font-weight:bold">000</span>&gt; lmf
+start    end        module name
+<span style="color:#ff0;font-weight:bold">000</span><span style="color:#ff0;font-weight:bold">80000</span> <span style="color:#ff0;font-weight:bold">000</span><span style="color:#ff0;font-weight:bold">87000</span>   ExercisePin C:<span style="color:#f00">\</span>pin<span style="color:#f00">\</span>source<span style="color:#f00">\</span>tools<span style="color:#f00">\</span>MallocTracer<span style="color:#f00">\</span>Release<span style="color:#f00">\</span>ExercisePin.exe
+<span style="color:#ff0;font-weight:bold">54</span>c20000 <span style="color:#ff0;font-weight:bold">54f</span><span style="color:#ff0;font-weight:bold">93000</span>   MallocTracer MallocTracer.dll
+<span style="color:#ff0;font-weight:bold">769</span>d0000 <span style="color:#ff0;font-weight:bold">76</span>ae0000   kernel32 C:<span style="color:#f00">\</span>Windows<span style="color:#f00">\</span>syswow64<span style="color:#f00">\</span>kernel32.dll
+<span style="color:#ff0;font-weight:bold">76</span>b50000 <span style="color:#ff0;font-weight:bold">76</span>b97000   KERNELBASE C:<span style="color:#f00">\</span>Windows<span style="color:#f00">\</span>syswow64<span style="color:#f00">\</span>KERNELBASE.dll
+<span style="color:#ff0;font-weight:bold">77800000</span> <span style="color:#ff0;font-weight:bold">77980000</span>   ntdll    C:<span style="color:#f00">\</span>Windows<span style="color:#f00">\</span>SysWOW64<span style="color:#f00">\</span>ntdll.dll
+<span style="color:#ff0;font-weight:bold">0</span>:<span style="color:#ff0;font-weight:bold">000</span>&gt; lmDvmMallocTracer
+Browse full module list
+start    end        module name
+<span style="color:#ff0;font-weight:bold">54</span>c20000 <span style="color:#ff0;font-weight:bold">54f</span><span style="color:#ff0;font-weight:bold">93000</span>   MallocTracer   (deferred)             
+    Image path: MallocTracer.dll
+    Image name: MallocTracer.dll
+    Browse all global symbols  functions  data
+    Timestamp:        Sat Jun <span style="color:#ff0;font-weight:bold">30</span> <span style="color:#ff0;font-weight:bold">14</span>:<span style="color:#ff0;font-weight:bold">28</span>:<span style="color:#ff0;font-weight:bold">14</span> <span style="color:#ff0;font-weight:bold">2018</span> (<span style="color:#ff0;font-weight:bold">5</span>B37F5EE)
+    CheckSum:         <span style="color:#ff0;font-weight:bold">00000000</span>
+    ImageSize:        <span style="color:#ff0;font-weight:bold">00373000</span>
+    Translations:     <span style="color:#ff0;font-weight:bold">0000.04</span>b0 <span style="color:#ff0;font-weight:bold">0000.04e4</span> <span style="color:#ff0;font-weight:bold">0409.04</span>b0 <span style="color:#ff0;font-weight:bold">0409.04e4</span>
+    Information from resource tables:
+<span style="color:#ff0;font-weight:bold">0</span>:<span style="color:#ff0;font-weight:bold">000</span>&gt; x /D /f MallocTracer!a*
+ A B C D E F G H I J K L M N O P Q R S T U V W X Y Z
+
+*** WARNING: Unable to verify checksum <span style="color:#fff;font-weight:bold">for</span> MallocTracer.dll
+<span style="color:#ff0;font-weight:bold">54</span>c549b8          MallocTracer!ASM_pin_wow64_gate (&lt;no parameter info&gt;)
+<span style="color:#ff0;font-weight:bold">54</span>c5483c          MallocTracer!ATOMIC_Increment16 (&lt;no parameter info&gt;)
+<span style="color:#ff0;font-weight:bold">54</span>c547d0          MallocTracer!ATOMIC_Swap8 (&lt;no parameter info&gt;)
+<span style="color:#ff0;font-weight:bold">54</span>c54854          MallocTracer!ATOMIC_Increment32 (&lt;no parameter info&gt;)
+<span style="color:#ff0;font-weight:bold">54e28</span>b64          MallocTracer!ADDRINT_AtomicInc (&lt;no parameter info&gt;)
+<span style="color:#ff0;font-weight:bold">54</span>c35e20          MallocTracer!atexit (&lt;no parameter info&gt;)
+<span style="color:#ff0;font-weight:bold">54</span>c547fc          MallocTracer!ATOMIC_Swap32 (&lt;no parameter info&gt;)
+<span style="color:#ff0;font-weight:bold">54</span>c54740          MallocTracer!ATOMIC_SpinDelay (&lt;no parameter info&gt;)
+<span style="color:#ff0;font-weight:bold">54</span>c533c0          MallocTracer!ATOMIC::LIFO_PTR&lt;LEVEL_BASE::SWMALLOC::FREE_LIST_ELEMENT,<span style="color:#ff0;font-weight:bold">3</span>,LEVEL_BASE::ATOMIC_STATS&gt;::PopInternal (&lt;no parameter info&gt;)
+<span style="color:#ff0;font-weight:bold">54e1</span>a2b0          MallocTracer!abort (&lt;no parameter info&gt;)
+<span style="color:#ff0;font-weight:bold">54</span>c54810          MallocTracer!ATOMIC_Copy64 (&lt;no parameter info&gt;)
+<span style="color:#ff0;font-weight:bold">54</span>c547e4          MallocTracer!ATOMIC_Swap16 (&lt;no parameter info&gt;)
+<span style="color:#ff0;font-weight:bold">54</span>c41710          MallocTracer!ATOMIC::LIFO_CTR&lt;ATOMIC::FIXED_LIFO&lt;LEVEL_BASE::LOCK_COMMAND *,<span style="color:#ff0;font-weight:bold">1</span>,<span style="color:#ff0;font-weight:bold">32</span>,ATOMIC::NULLSTATS&gt;::ELEMENT,ATOMIC::FIXED_LIFO&lt;LEVEL_BASE::LOCK_COMMAND *,<span style="color:#ff0;font-weight:bold">1</span>,<span style="color:#ff0;font-weight:bold">32</span>,ATOMIC::NULLSTATS&gt;::ELEMENT_HEAP,<span style="color:#ff0;font-weight:bold">1</span>,<span style="color:#ff0;font-weight:bold">32</span>,<span style="color:#fff;font-weight:bold">unsigned</span> <span style="color:#fff;font-weight:bold">__int64</span>,ATOMIC::NULLSTATS&gt;::Pop (&lt;no parameter info&gt;)
+<span style="color:#ff0;font-weight:bold">54</span>c54824          MallocTracer!ATOMIC_Increment8 (&lt;no parameter info&gt;)
+<span style="color:#ff0;font-weight:bold">54</span>c549bb          MallocTracer!ASM_pin_wow64_gate_end (&lt;no parameter info&gt;)
+<span style="color:#ff0;font-weight:bold">54</span>c5478c          MallocTracer!ATOMIC_CompareAndSwap32 (&lt;no parameter info&gt;)
+<span style="color:#ff0;font-weight:bold">54</span>c54750          MallocTracer!ATOMIC_CompareAndSwap8 (&lt;no parameter info&gt;)
+<span style="color:#ff0;font-weight:bold">54</span>c41820          MallocTracer!ATOMIC::LIFO_CTR&lt;ATOMIC::FIXED_LIFO&lt;LEVEL_BASE::LOCK_COMMAND *,<span style="color:#ff0;font-weight:bold">1</span>,<span style="color:#ff0;font-weight:bold">32</span>,ATOMIC::NULLSTATS&gt;::ELEMENT,ATOMIC::FIXED_LIFO&lt;LEVEL_BASE::LOCK_COMMAND *,<span style="color:#ff0;font-weight:bold">1</span>,<span style="color:#ff0;font-weight:bold">32</span>,ATOMIC::NULLSTATS&gt;::ELEMENT_HEAP,<span style="color:#ff0;font-weight:bold">1</span>,<span style="color:#ff0;font-weight:bold">32</span>,<span style="color:#fff;font-weight:bold">unsigned</span> <span style="color:#fff;font-weight:bold">__int64</span>,ATOMIC::NULLSTATS&gt;::Push (&lt;no parameter info&gt;)
+<span style="color:#ff0;font-weight:bold">54</span>c535a0          MallocTracer!ATOMIC::IDSET&lt;<span style="color:#ff0;font-weight:bold">7</span>,LEVEL_BASE::ATOMIC_STATS&gt;::ReleaseID (&lt;no parameter info&gt;)
+<span style="color:#ff0;font-weight:bold">54</span>c547a8          MallocTracer!ATOMIC_CompareAndSwap64 (&lt;no parameter info&gt;)
+<span style="color:#ff0;font-weight:bold">54</span>c3e660          MallocTracer!ATOMIC::EXPONENTIAL_BACKOFF&lt;LEVEL_BASE::ATOMIC_STATS&gt;::~EXPONENTIAL_BACKOFF&lt;LEVEL_BASE::ATOMIC_STATS&gt; (&lt;no parameter info&gt;)
+<span style="color:#ff0;font-weight:bold">54</span>c5476c          MallocTracer!ATOMIC_CompareAndSwap16 (&lt;no parameter info&gt;)
+<span style="color:#ff0;font-weight:bold">0</span>:<span style="color:#ff0;font-weight:bold">000</span>&gt; x /D /f MallocTracer!m*
+ A B C D E F G H I J K L M N O P Q R S T U V W X Y Z
+
+<span style="color:#ff0;font-weight:bold">54e21</span>e20          MallocTracer!mbsinit (&lt;no parameter info&gt;)
+<span style="color:#ff0;font-weight:bold">54</span>c6e450          MallocTracer!mmap (&lt;no parameter info&gt;)
+<span style="color:#ff0;font-weight:bold">54</span>c3bb40          MallocTracer!malloc (&lt;no parameter info&gt;)
+<span style="color:#ff0;font-weight:bold">54e21</span>db0          MallocTracer!memchr (&lt;no parameter info&gt;)
+<span style="color:#ff0;font-weight:bold">54e21</span>e00          MallocTracer!mbrtowc (&lt;no parameter info&gt;)
+<span style="color:#ff0;font-weight:bold">54e26500</span>          MallocTracer!mbrlen (&lt;no parameter info&gt;)
+<span style="color:#ff0;font-weight:bold">54e21</span>e40          MallocTracer!mbsnrtowcs (&lt;no parameter info&gt;)
+<span style="color:#ff0;font-weight:bold">54e261</span>b0          MallocTracer!mbrtoc32 (&lt;no parameter info&gt;)
+<span style="color:#ff0;font-weight:bold">54</span>c38730          MallocTracer!main (&lt;no parameter info&gt;)
+<span style="color:#ff0;font-weight:bold">54e1</span>a2f0          MallocTracer!memset (&lt;no parameter info&gt;)
+<span style="color:#ff0;font-weight:bold">54e26410</span>          MallocTracer!mbstate_get_byte (&lt;no parameter info&gt;)
+<span style="color:#ff0;font-weight:bold">54e22010</span>          MallocTracer!mbsrtowcs (&lt;no parameter info&gt;)
+<span style="color:#ff0;font-weight:bold">54e1</span>a1a0          MallocTracer!memmove (&lt;no parameter info&gt;)
+<span style="color:#ff0;font-weight:bold">54e263</span>e0          MallocTracer!mbstate_bytes_so_far (&lt;no parameter info&gt;)
+<span style="color:#ff0;font-weight:bold">54e1</span>a2c0          MallocTracer!memcpy (&lt;no parameter info&gt;)
+<span style="color:#ff0;font-weight:bold">54</span>c6e480          MallocTracer!munmap (&lt;no parameter info&gt;)
+<span style="color:#ff0;font-weight:bold">54e26420</span>          MallocTracer!mbstate_set_byte (&lt;no parameter info&gt;)
+<span style="color:#ff0;font-weight:bold">0</span>:<span style="color:#ff0;font-weight:bold">000</span>&gt; bp <span style="color:#ff0;font-weight:bold">54</span>c38730
+<span style="color:#ff0;font-weight:bold">0</span>:<span style="color:#ff0;font-weight:bold">000</span>&gt; g
+Breakpoint <span style="color:#ff0;font-weight:bold">0</span> hit
+eax=<span style="color:#ff0;font-weight:bold">53833</span>cb8 ebx=<span style="color:#ff0;font-weight:bold">54f</span><span style="color:#ff0;font-weight:bold">64000</span> ecx=<span style="color:#ff0;font-weight:bold">00000000</span> edx=<span style="color:#ff0;font-weight:bold">54f</span><span style="color:#ff0;font-weight:bold">356</span>c0 esi=<span style="color:#ff0;font-weight:bold">54f</span><span style="color:#ff0;font-weight:bold">6500</span>a edi=<span style="color:#ff0;font-weight:bold">54f</span><span style="color:#ff0;font-weight:bold">65000</span>
+eip=<span style="color:#ff0;font-weight:bold">54</span>c38730 esp=<span style="color:#ff0;font-weight:bold">01</span>ad19f4 ebp=<span style="color:#ff0;font-weight:bold">53833</span>c8c iopl=<span style="color:#ff0;font-weight:bold">0</span>         nv up ei pl zr na pe nc
+cs=<span style="color:#ff0;font-weight:bold">0023</span>  ss=<span style="color:#ff0;font-weight:bold">002</span>b  ds=<span style="color:#ff0;font-weight:bold">002</span>b  es=<span style="color:#ff0;font-weight:bold">002</span>b  fs=<span style="color:#ff0;font-weight:bold">0053</span>  gs=<span style="color:#ff0;font-weight:bold">002</span>b             efl=<span style="color:#ff0;font-weight:bold">00000246</span>
+MallocTracer!main:
+<span style="color:#ff0;font-weight:bold">54</span>c38730 <span style="color:#ff0;font-weight:bold">55</span>              push    ebp
+</code></pre></div><p>For <code>DynamoRIO</code> I&rsquo;ll just point you to the official documentation since the debugging process can be a bit more tricky. Check the documentation <a href="https://github.com/DynamoRIO/dynamorio/wiki/Debugging">here</a>.</p>
+<h2 id="pintool-winmalloctracer">Pintool (WinMallocTracer)</h2>
+<p>As mentioned in the beginning, this post is all about <code>Windows</code>. Which means it doesn&rsquo;t really make sense to be tracking <code>malloc</code>, and/or <code>free</code>. If we want to play with &ldquo;real&rdquo; <code>Windows</code> applications we need to <code>trace</code> the <code>Windows</code> <code>Heap</code> family of functions.</p>
+<p>It&rsquo;s a good time to look again at the diagram shown before that illustrates the relationship of <code>Windows API</code> calls used to allocate process memory (from the book <a href="https://www.amazon.co.uk/Art-Memory-Forensics-Detecting-Malware/dp/1118825098">The Art of Memory Forensics</a>).</p>
+<p>If we want to make sure we&rsquo;ll always &ldquo;see&rdquo; the memory allocations performed by <code>Windows</code> applications, we should be looking for <a href="https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/content/ntifs/nf-ntifs-rtlallocateheap">RtlAllocateHeap</a>, <a href="https://undocumented.ntinternals.net/index.html?page=UserMode%2FUndocumented%20Functions%2FMemory%20Management%2FHeap%20Memory%2FRtlReAllocateHeap.html">RtlReAllocateHeap</a>, <a href="https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/content/ntifs/nf-ntifs-rtlfreeheap">RtlFreeHeap</a>, <a href="https://msdn.microsoft.com/en-us/library/windows/desktop/aa366890(v=vs.85).aspx">VirtualAllocEx</a>, and <a href="https://msdn.microsoft.com/en-us/library/windows/desktop/aa366894(v=vs.85).aspx">VirtualFreeEx</a>.</p>
+<p>The <code>Pintool</code> below looks exactly at these functions. If you play a bit with multiple applications you&rsquo;ll realize that to accomplish &ldquo;our&rdquo; goal of tracking memory allocations we&rsquo;ll face a lot of challenges. The code below tries to overcome some of them.</p>
+<p>I won&rsquo;t go into detail explaining the <code>API</code> calls used as I did before. Mainly because they are mostly the same. I&rsquo;ll leave the code here and you can go through it. After I simply mention some of the main differences when compared to the basic <code>Pintool</code> presented before.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp"><span style="color:#0f0;font-weight:bold">#include</span> <span style="color:#0f0;font-weight:bold">&#34;pin.h&#34;</span><span style="color:#0f0;font-weight:bold">
+</span><span style="color:#0f0;font-weight:bold">#include</span> <span style="color:#0f0;font-weight:bold">&lt;iostream&gt;</span><span style="color:#0f0;font-weight:bold">
+</span><span style="color:#0f0;font-weight:bold">#include</span> <span style="color:#0f0;font-weight:bold">&lt;fstream&gt;</span><span style="color:#0f0;font-weight:bold">
+</span><span style="color:#0f0;font-weight:bold">#include</span> <span style="color:#0f0;font-weight:bold">&lt;map&gt;</span><span style="color:#0f0;font-weight:bold">
+</span><span style="color:#0f0;font-weight:bold"></span>
+map&lt;ADDRINT, <span style="color:#fff;font-weight:bold">bool</span>&gt; MallocMap;
+ofstream LogFile;
+KNOB&lt;string&gt; LogFileName(KNOB_MODE_WRITEONCE, <span style="color:#0ff;font-weight:bold">&#34;pintool&#34;</span>, <span style="color:#0ff;font-weight:bold">&#34;o&#34;</span>, <span style="color:#0ff;font-weight:bold">&#34;memprofile.out&#34;</span>, <span style="color:#0ff;font-weight:bold">&#34;Memory trace file name&#34;</span>);
+KNOB&lt;string&gt; EntryPoint(KNOB_MODE_WRITEONCE, <span style="color:#0ff;font-weight:bold">&#34;pintool&#34;</span>, <span style="color:#0ff;font-weight:bold">&#34;entrypoint&#34;</span>, <span style="color:#0ff;font-weight:bold">&#34;main&#34;</span>, <span style="color:#0ff;font-weight:bold">&#34;Guest entry-point function&#34;</span>);
+KNOB&lt;BOOL&gt; EnumSymbols(KNOB_MODE_WRITEONCE, <span style="color:#0ff;font-weight:bold">&#34;pintool&#34;</span>, <span style="color:#0ff;font-weight:bold">&#34;symbols&#34;</span>, <span style="color:#0ff;font-weight:bold">&#34;0&#34;</span>, <span style="color:#0ff;font-weight:bold">&#34;List Symbols&#34;</span>);
+BOOL start_trace = <span style="color:#fff;font-weight:bold">false</span>;
+
+VOID LogBeforeVirtualAlloc(ADDRINT size)
+{
+  <span style="color:#fff;font-weight:bold">if</span> (!start_trace)
+    <span style="color:#fff;font-weight:bold">return</span>;
+
+  LogFile &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;[*] VirtualAllocEx(&#34;</span> &lt;&lt; dec &lt;&lt; size &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;)&#34;</span>;
+}
+
+VOID LogAfterVirtualAlloc(ADDRINT addr)
+{
+  <span style="color:#fff;font-weight:bold">if</span> (!start_trace)
+    <span style="color:#fff;font-weight:bold">return</span>;
+
+  <span style="color:#fff;font-weight:bold">if</span> (addr == <span style="color:#fff;font-weight:bold">NULL</span>)
+  {
+    cerr &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;[-] Error: VirtualAllocEx() return value was NULL.&#34;</span>;
+    <span style="color:#fff;font-weight:bold">return</span>;
+  }
+
+  map&lt;ADDRINT, <span style="color:#fff;font-weight:bold">bool</span>&gt;::iterator it = MallocMap.find(addr);
+
+  <span style="color:#fff;font-weight:bold">if</span> (it != MallocMap.end())
+  {
+    <span style="color:#fff;font-weight:bold">if</span> (it-&gt;second)
+      it-&gt;second = <span style="color:#fff;font-weight:bold">false</span>;
+    <span style="color:#fff;font-weight:bold">else</span>
+      cerr &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;[-] Error: allocating memory not freed!?!&#34;</span> &lt;&lt; endl;
+  }
+  <span style="color:#fff;font-weight:bold">else</span>
+  {
+    MallocMap.insert(pair&lt;ADDRINT, <span style="color:#fff;font-weight:bold">bool</span>&gt;(addr, <span style="color:#fff;font-weight:bold">false</span>));
+    LogFile &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;</span><span style="color:#0ff;font-weight:bold">\t\t</span><span style="color:#0ff;font-weight:bold">= 0x&#34;</span> &lt;&lt; hex &lt;&lt; addr &lt;&lt; endl;
+  }
+}
+
+VOID LogBeforeVirtualFree(ADDRINT addr)
+{
+  <span style="color:#fff;font-weight:bold">if</span> (!start_trace)
+    <span style="color:#fff;font-weight:bold">return</span>;
+
+  map&lt;ADDRINT, <span style="color:#fff;font-weight:bold">bool</span>&gt;::iterator it = MallocMap.find(addr);
+
+  <span style="color:#fff;font-weight:bold">if</span> (it != MallocMap.end())
+  {
+    <span style="color:#fff;font-weight:bold">if</span> (it-&gt;second)
+      LogFile &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;[*] Memory at address 0x&#34;</span> &lt;&lt; hex &lt;&lt; addr &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34; has been freed more than once (Double Free).&#34;</span> &lt;&lt; endl;
+    <span style="color:#fff;font-weight:bold">else</span>
+    {
+      it-&gt;second = <span style="color:#fff;font-weight:bold">true</span>;    <span style="color:#007f7f">// Mark it as freed
+</span><span style="color:#007f7f"></span>      LogFile &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;[*] VirtualFreeEx(0x&#34;</span> &lt;&lt; hex &lt;&lt; addr &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;)&#34;</span> &lt;&lt; endl;
+    }
+  }
+  <span style="color:#fff;font-weight:bold">else</span>
+    LogFile &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;[*] Freeing unallocated memory at address 0x&#34;</span> &lt;&lt; hex &lt;&lt; addr &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;.&#34;</span> &lt;&lt; endl;
+}
+
+VOID LogBeforeReAlloc(ADDRINT freed_addr, ADDRINT size)
+{
+  <span style="color:#fff;font-weight:bold">if</span> (!start_trace)
+    <span style="color:#fff;font-weight:bold">return</span>;
+
+  <span style="color:#007f7f">// mark freed_addr as free
+</span><span style="color:#007f7f"></span>  map&lt;ADDRINT, <span style="color:#fff;font-weight:bold">bool</span>&gt;::iterator it = MallocMap.find(freed_addr);
+
+  <span style="color:#fff;font-weight:bold">if</span> (it != MallocMap.end())
+  {
+    it-&gt;second = <span style="color:#fff;font-weight:bold">true</span>;
+    LogFile &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;[*] RtlHeapfree(0x&#34;</span> &lt;&lt; hex &lt;&lt; freed_addr &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;) from RtlHeapRealloc()&#34;</span> &lt;&lt; endl;
+  }
+  <span style="color:#fff;font-weight:bold">else</span>
+    LogFile &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;[-] RtlHeapRealloc could not find addr to free??? - &#34;</span> &lt;&lt; freed_addr &lt;&lt; endl;
+
+  LogFile &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;[*] RtlHeapReAlloc(&#34;</span> &lt;&lt; dec &lt;&lt; size &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;)&#34;</span>;
+}
+
+VOID LogAfterReAlloc(ADDRINT addr)
+{
+  <span style="color:#fff;font-weight:bold">if</span> (!start_trace)
+    <span style="color:#fff;font-weight:bold">return</span>;
+
+  <span style="color:#fff;font-weight:bold">if</span> (addr == <span style="color:#fff;font-weight:bold">NULL</span>)
+    <span style="color:#fff;font-weight:bold">return</span>;
+
+  map&lt;ADDRINT, <span style="color:#fff;font-weight:bold">bool</span>&gt;::iterator it = MallocMap.find(addr);
+
+  <span style="color:#fff;font-weight:bold">if</span> (it != MallocMap.end())
+  {
+    <span style="color:#fff;font-weight:bold">if</span> (it-&gt;second)
+      it-&gt;second = <span style="color:#fff;font-weight:bold">false</span>;
+    <span style="color:#fff;font-weight:bold">else</span>
+      <span style="color:#007f7f">// it already exists because of the HeapAlloc, we don&#39;t need to insert... just log it
+</span><span style="color:#007f7f"></span>      LogFile &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;</span><span style="color:#0ff;font-weight:bold">\t\t</span><span style="color:#0ff;font-weight:bold">= 0x&#34;</span> &lt;&lt; hex &lt;&lt; addr &lt;&lt; endl;
+  }
+}
+
+VOID LogBeforeMalloc(ADDRINT size)
+{
+  <span style="color:#fff;font-weight:bold">if</span> (!start_trace)
+    <span style="color:#fff;font-weight:bold">return</span>;
+
+  LogFile &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;[*] RtlAllocateHeap(&#34;</span> &lt;&lt; dec &lt;&lt; size &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;)&#34;</span>;
+}
+
+VOID LogAfterMalloc(ADDRINT addr)
+{
+  <span style="color:#fff;font-weight:bold">if</span> (!start_trace)
+    <span style="color:#fff;font-weight:bold">return</span>;
+
+  <span style="color:#fff;font-weight:bold">if</span> (addr == <span style="color:#fff;font-weight:bold">NULL</span>)
+  {
+    cerr &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;[-] Error: RtlAllocateHeap() return value was NULL.&#34;</span>;
+    <span style="color:#fff;font-weight:bold">return</span>;
+  }
+
+  map&lt;ADDRINT, <span style="color:#fff;font-weight:bold">bool</span>&gt;::iterator it = MallocMap.find(addr);
+
+  <span style="color:#fff;font-weight:bold">if</span> (it != MallocMap.end())
+  {
+    <span style="color:#fff;font-weight:bold">if</span> (it-&gt;second)
+      it-&gt;second = <span style="color:#fff;font-weight:bold">false</span>;
+    <span style="color:#fff;font-weight:bold">else</span>
+      cerr &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;[-] Error: allocating memory not freed!?!&#34;</span> &lt;&lt; endl;
+  }
+  <span style="color:#fff;font-weight:bold">else</span>
+  {
+    MallocMap.insert(pair&lt;ADDRINT, <span style="color:#fff;font-weight:bold">bool</span>&gt;(addr, <span style="color:#fff;font-weight:bold">false</span>));
+    LogFile &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;</span><span style="color:#0ff;font-weight:bold">\t\t</span><span style="color:#0ff;font-weight:bold">= 0x&#34;</span> &lt;&lt; hex &lt;&lt; addr &lt;&lt; endl;
+  }
+}
+
+VOID LogFree(ADDRINT addr)
+{
+  <span style="color:#fff;font-weight:bold">if</span> (!start_trace)
+    <span style="color:#fff;font-weight:bold">return</span>;
+
+  map&lt;ADDRINT, <span style="color:#fff;font-weight:bold">bool</span>&gt;::iterator it = MallocMap.find(addr);
+
+  <span style="color:#fff;font-weight:bold">if</span> (it != MallocMap.end())
+  {
+    <span style="color:#fff;font-weight:bold">if</span> (it-&gt;second)
+      LogFile &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;[*] Memory at address 0x&#34;</span> &lt;&lt; hex &lt;&lt; addr &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34; has been freed more than once (Double Free).&#34;</span> &lt;&lt; endl;
+    <span style="color:#fff;font-weight:bold">else</span>
+    {
+      it-&gt;second = <span style="color:#fff;font-weight:bold">true</span>;    <span style="color:#007f7f">// Mark it as freed
+</span><span style="color:#007f7f"></span>      LogFile &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;[*] RtlFreeHeap(0x&#34;</span> &lt;&lt; hex &lt;&lt; addr &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;)&#34;</span> &lt;&lt; endl;
+    }
+  }
+  <span style="color:#fff;font-weight:bold">else</span>
+    LogFile &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;[*] Freeing unallocated memory at address 0x&#34;</span> &lt;&lt; hex &lt;&lt; addr &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;.&#34;</span> &lt;&lt; endl;
+}
+
+VOID BeforeMain() {
+  start_trace = <span style="color:#fff;font-weight:bold">true</span>;
+}
+VOID AfterMain() {
+  start_trace = <span style="color:#fff;font-weight:bold">false</span>;
+}
+
+VOID CustomInstrumentation(IMG img, VOID *v)
+{
+  <span style="color:#fff;font-weight:bold">for</span> (SYM sym = IMG_RegsymHead(img); SYM_Valid(sym); sym = SYM_Next(sym))
+  {
+    string undFuncName = PIN_UndecorateSymbolName(SYM_Name(sym), UNDECORATION_NAME_ONLY);
+
+    <span style="color:#fff;font-weight:bold">if</span>(EnumSymbols.Value())
+    {
+      LogFile &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;&#34;</span> &lt;&lt; undFuncName &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;&#34;</span> &lt;&lt; endl;
+      <span style="color:#fff;font-weight:bold">continue</span>;
+    }
+
+    <span style="color:#fff;font-weight:bold">if</span> (undFuncName == EntryPoint.Value().c_str())
+    {
+      RTN allocRtn = RTN_FindByAddress(IMG_LowAddress(img) + SYM_Value(sym));
+
+      <span style="color:#fff;font-weight:bold">if</span> (RTN_Valid(allocRtn))
+      {
+        RTN_Open(allocRtn);
+
+        RTN_InsertCall(allocRtn, IPOINT_BEFORE, (AFUNPTR)BeforeMain, IARG_END);
+        RTN_InsertCall(allocRtn, IPOINT_AFTER, (AFUNPTR)AfterMain, IARG_END);
+
+        RTN_Close(allocRtn);
+      }
+    }
+    <span style="color:#fff;font-weight:bold">if</span> (undFuncName == <span style="color:#0ff;font-weight:bold">&#34;RtlAllocateHeap&#34;</span>)
+    {
+      RTN allocRtn = RTN_FindByAddress(IMG_LowAddress(img) + SYM_Value(sym));
+
+      <span style="color:#fff;font-weight:bold">if</span> (RTN_Valid(allocRtn))
+      {
+        RTN_Open(allocRtn);
+        
+        <span style="color:#007f7f">// Record RtlAllocateHeap size
+</span><span style="color:#007f7f"></span>        RTN_InsertCall(allocRtn, IPOINT_BEFORE, (AFUNPTR)LogBeforeMalloc,
+          IARG_FUNCARG_ENTRYPOINT_VALUE, <span style="color:#ff0;font-weight:bold">2</span>, IARG_END);
+
+        <span style="color:#007f7f">// Record RtlAllocateHeap return address
+</span><span style="color:#007f7f"></span>        RTN_InsertCall(allocRtn, IPOINT_AFTER, (AFUNPTR)LogAfterMalloc,
+          IARG_FUNCRET_EXITPOINT_VALUE, IARG_END);
+        
+        RTN_Close(allocRtn);
+      }
+    }
+    <span style="color:#fff;font-weight:bold">if</span> (undFuncName == <span style="color:#0ff;font-weight:bold">&#34;RtlReAllocateHeap&#34;</span>)
+    {
+      RTN reallocRtn = RTN_FindByAddress(IMG_LowAddress(img) + SYM_Value(sym));
+
+      <span style="color:#fff;font-weight:bold">if</span> (RTN_Valid(reallocRtn))
+      {
+        RTN_Open(reallocRtn);
+
+        <span style="color:#007f7f">// Record RtlReAllocateHeap freed_addr, size
+</span><span style="color:#007f7f"></span>        RTN_InsertCall(reallocRtn, IPOINT_BEFORE, (AFUNPTR)LogBeforeReAlloc,
+          IARG_FUNCARG_ENTRYPOINT_VALUE, <span style="color:#ff0;font-weight:bold">2</span>, IARG_FUNCARG_ENTRYPOINT_VALUE, <span style="color:#ff0;font-weight:bold">3</span>, IARG_END);
+
+        <span style="color:#007f7f">// Record RtlReAllocateHeap return address
+</span><span style="color:#007f7f"></span>        RTN_InsertCall(reallocRtn, IPOINT_AFTER, (AFUNPTR)LogAfterReAlloc,
+          IARG_FUNCRET_EXITPOINT_VALUE, IARG_END);
+
+        RTN_Close(reallocRtn);
+      }
+    }
+    <span style="color:#fff;font-weight:bold">else</span> <span style="color:#fff;font-weight:bold">if</span> (undFuncName == <span style="color:#0ff;font-weight:bold">&#34;RtlFreeHeap&#34;</span>)
+    {
+      RTN freeRtn = RTN_FindByAddress(IMG_LowAddress(img) + SYM_Value(sym));
+
+      <span style="color:#fff;font-weight:bold">if</span> (RTN_Valid(freeRtn))
+      {
+        RTN_Open(freeRtn);
+
+        RTN_InsertCall(freeRtn, IPOINT_BEFORE, (AFUNPTR)LogFree,
+          IARG_FUNCARG_ENTRYPOINT_VALUE, <span style="color:#ff0;font-weight:bold">2</span>,
+          IARG_END);
+
+        RTN_Close(freeRtn);
+      }
+    }
+    <span style="color:#fff;font-weight:bold">if</span> (undFuncName == <span style="color:#0ff;font-weight:bold">&#34;VirtualAllocEx&#34;</span>)
+    {
+      RTN vrallocRtn = RTN_FindByAddress(IMG_LowAddress(img) + SYM_Value(sym));
+
+      <span style="color:#fff;font-weight:bold">if</span> (RTN_Valid(vrallocRtn))
+      {
+        RTN_Open(vrallocRtn);
+
+        RTN_InsertCall(vrallocRtn, IPOINT_BEFORE, (AFUNPTR)LogBeforeVirtualAlloc,
+          IARG_FUNCARG_ENTRYPOINT_VALUE, <span style="color:#ff0;font-weight:bold">2</span>, IARG_END);
+
+        RTN_InsertCall(vrallocRtn, IPOINT_AFTER, (AFUNPTR)LogAfterVirtualAlloc,
+          IARG_FUNCRET_EXITPOINT_VALUE, IARG_END);
+
+        RTN_Close(vrallocRtn);
+      }
+    }
+    <span style="color:#fff;font-weight:bold">if</span> (undFuncName == <span style="color:#0ff;font-weight:bold">&#34;VirtualFreeEx&#34;</span>)
+    {
+      RTN vrfreeRtn = RTN_FindByAddress(IMG_LowAddress(img) + SYM_Value(sym));
+
+      <span style="color:#fff;font-weight:bold">if</span> (RTN_Valid(vrfreeRtn))
+      {
+        RTN_Open(vrfreeRtn);
+
+        RTN_InsertCall(vrfreeRtn, IPOINT_BEFORE, (AFUNPTR)LogBeforeVirtualFree,
+          IARG_FUNCARG_ENTRYPOINT_VALUE, <span style="color:#ff0;font-weight:bold">1</span>, IARG_END);
+
+        RTN_Close(vrfreeRtn);
+      }
+    }
+  }
+}
+
+VOID FinalFunc(INT32 code, VOID *v)
+{
+  <span style="color:#fff;font-weight:bold">for</span> (pair&lt;ADDRINT, <span style="color:#fff;font-weight:bold">bool</span>&gt; p : MallocMap)
+  {
+    <span style="color:#fff;font-weight:bold">if</span> (!p.second)
+      LogFile &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;[*] Memory at address 0x&#34;</span> &lt;&lt; hex &lt;&lt; p.first &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34; allocated but not freed&#34;</span> &lt;&lt; endl;
+  }
+
+  LogFile.close();
+}
+
+<span style="color:#fff;font-weight:bold">int</span> main(<span style="color:#fff;font-weight:bold">int</span> argc, <span style="color:#fff;font-weight:bold">char</span> *argv[])
+{
+  PIN_InitSymbols();
+  PIN_Init(argc, argv);
+
+  LogFile.open(LogFileName.Value().c_str());
+  LogFile &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;## Memory tracing for PID = &#34;</span> &lt;&lt; PIN_GetPid() &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34; started&#34;</span> &lt;&lt; endl;
+
+  <span style="color:#fff;font-weight:bold">if</span> (EnumSymbols.Value())
+    LogFile &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;### Listing Symbols&#34;</span> &lt;&lt; endl;
+  <span style="color:#fff;font-weight:bold">else</span>
+    LogFile &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;### Started tracing after &#39;&#34;</span> &lt;&lt; EntryPoint.Value().c_str() &lt;&lt; <span style="color:#0ff;font-weight:bold">&#34;()&#39; call&#34;</span> &lt;&lt; endl;
+  
+  IMG_AddInstrumentFunction(CustomInstrumentation, <span style="color:#fff;font-weight:bold">NULL</span>);
+  PIN_AddFiniFunction(FinalFunc, <span style="color:#fff;font-weight:bold">NULL</span>);
+  PIN_StartProgram();
+
+  <span style="color:#fff;font-weight:bold">return</span> <span style="color:#ff0;font-weight:bold">0</span>;
+}
+</code></pre></div><p>There are a couple of new options supported by this <code>Pintool</code>. If you look at the <code>KNOB</code> switches (below), you&rsquo;ll see that the <code>Pintool</code> now supports two new options.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp">KNOB&lt;string&gt; EntryPoint(KNOB_MODE_WRITEONCE, <span style="color:#0ff;font-weight:bold">&#34;pintool&#34;</span>, <span style="color:#0ff;font-weight:bold">&#34;entrypoint&#34;</span>, <span style="color:#0ff;font-weight:bold">&#34;main&#34;</span>, <span style="color:#0ff;font-weight:bold">&#34;Guest entry-point function&#34;</span>);
+KNOB&lt;BOOL&gt; EnumSymbols(KNOB_MODE_WRITEONCE, <span style="color:#0ff;font-weight:bold">&#34;pintool&#34;</span>, <span style="color:#0ff;font-weight:bold">&#34;symbols&#34;</span>, <span style="color:#0ff;font-weight:bold">&#34;0&#34;</span>, <span style="color:#0ff;font-weight:bold">&#34;List Symbols&#34;</span>);
+</code></pre></div><p>You can specify what&rsquo;s the entry-point function of the target/guest application you want to trace. Why is this useful? If you don&rsquo;t do it, all the initialization code will also be <code>traced</code> and it will become very hard to make sense of the output of our <code>Pintool</code>. Try. By default, the <code>tracing</code> will start only after the function <code>main</code> is called. Obviously, if our target/guest application doesn&rsquo;t have a <code>main</code> function, we&rsquo;ll end with an empty output file.</p>
+<p>Let&rsquo;s look at a specific example. Let&rsquo;s look at the <code>Windows</code> <code>calc.exe</code>. This binary doesn&rsquo;t have a <code>main</code> function. So we run our <code>Pintool</code> as shown below.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-fallback" data-lang="fallback">C:\pin&gt;pin -t source\tools\WinMallocTracer\Release\WinMallocTracer.dll -- calc.exe
+</code></pre></div><p>We&rsquo;ll get the following output.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-fallback" data-lang="fallback">## Memory tracing for PID = 1732 started
+### Started tracing after &#39;main()&#39; call
+</code></pre></div><p>As expected, since <code>calc.exe</code> doesn&rsquo;t have a <code>main</code> function. So, if we want to <code>trace</code> <code>calc.exe</code> or any other binary, we&rsquo;ll need to find what&rsquo;s its entry-point (or any other call after we want to start our <code>trace</code>). We can launch it on <code>IDA</code>, for example, or we can use the other <code>KNOB</code> switch (<code>-symbols</code>) as shown below to list all the <code>symbols</code>.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-fallback" data-lang="fallback">C:\pin&gt;pin -t source\tools\WinMallocTracer\Release\WinMallocTracer.dll -symbols 1 -- calc.exe
+</code></pre></div><p>And look at the output file (by default <code>memprofile.out</code>) to see if we can find the function we are looking for.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-fallback" data-lang="fallback">C:\pin&gt; type memprofile.out
+## Memory tracing for PID = 5696 started
+### Listing Symbols
+unnamedImageEntryPoint
+InterlockedIncrement
+InterlockedDecrement
+InterlockedExchange
+InterlockedCompareExchange
+InterlockedExchangeAdd
+KernelBaseGetGlobalData
+unnamedImageEntryPoint
+GetErrorMode
+SetErrorMode
+CreateIoCompletionPort
+PostQueuedCompletionStatus
+GetOverlappedResult
+(...)
+</code></pre></div><p>If you want to see the whole contents of the file you can find it <a href="https://github.com/houseofxyz/DBI/tree/master/calc.memprofile.out">here</a>. The first line is quite interesting though, and it&rsquo;s probably what we are looking for (<code>unnamedImageEntryPoint</code>). So we can use our <code>Pintool</code> as shown below.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-fallback" data-lang="fallback">C:\pin&gt;pin -t source\tools\WinMallocTracer\Release\WinMallocTracer.dll -entrypoint unnamedImageEntryPoint -- calc.exe
+</code></pre></div><p>And if we look at the output this time we&rsquo;ll get something like:</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-fallback" data-lang="fallback">C:\pin&gt; type memprofile.out
+## Memory tracing for PID = 6656 started
+### Started tracing after &#39;unnamedImageEntryPoint()&#39; call
+[*] RtlAllocateHeap(32)   = 0x4d9098
+[*] RtlAllocateHeap(564)    = 0x2050590
+[*] RtlAllocateHeap(520)    = 0x4dcb18
+[*] RtlAllocateHeap(1024)   = 0x4dd240
+[*] RtlAllocateHeap(532)    = 0x20507d0
+[*] RtlAllocateHeap(1152)   = 0x20509f0
+[*] RtlAllocateHeap(3608)   = 0x4dd648
+[*] RtlAllocateHeap(1804)   = 0x2050e78
+[*] RtlFreeHeap(0x4dd648)
+(...)
+</code></pre></div><p>If you want to see the whole contents of the file you can find it <a href="https://github.com/houseofxyz/DBI/tree/master/calc.full.memprofile.out">here</a>. As you&rsquo;ll see, it&rsquo;s still hard to read and make sense of the output. As I mentioned before, this <code>Pintool</code> can actually tell there&rsquo;s a problem, but not where it is. I&rsquo;ll try to improve the <code>Pintool</code>, and if you are interested you can follow its future developments <a href="https://github.com/houseofxyz/WinMallocTracer">here</a>. At least, every time I detect an issue I&rsquo;ll add a <a href="https://software.intel.com/sites/landingpage/pintool/docs/81205/Pin/html/group__APPDEBUG__API.html#gad46f50d48ebcf2414e766c2978111c4b">PIN_ApplicationBreakpoint</a> (see <a href="https://github.com/houseofxyz/WinMallocTracer">here</a>). In some cases, it might still be very hard to locate the issue, but it&rsquo;s a starting point. There are also a lot of <code>false positives</code>, as you can see in the output of <code>calc.exe</code>. To validate that actually the <code>Pintool</code> is working we can use the following sample target/guest (I called it <code>ExercisePin2.exe</code>).</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp"><span style="color:#0f0;font-weight:bold">#include</span> <span style="color:#0f0;font-weight:bold">&lt;windows.h&gt;</span><span style="color:#0f0;font-weight:bold">
+</span><span style="color:#0f0;font-weight:bold">#include</span> <span style="color:#0f0;font-weight:bold">&lt;stdio.h&gt;</span><span style="color:#0f0;font-weight:bold">
+</span><span style="color:#0f0;font-weight:bold"></span>
+<span style="color:#0f0;font-weight:bold">#define PAGELIMIT 80
+</span><span style="color:#0f0;font-weight:bold"></span>
+<span style="color:#fff;font-weight:bold">int</span> my_heap_functions(<span style="color:#fff;font-weight:bold">char</span> *buf) {
+  HLOCAL h1 = <span style="color:#ff0;font-weight:bold">0</span>, h2 = <span style="color:#ff0;font-weight:bold">0</span>, h3 = <span style="color:#ff0;font-weight:bold">0</span>, h4 = <span style="color:#ff0;font-weight:bold">0</span>;
+
+  h1 = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, <span style="color:#ff0;font-weight:bold">260</span>);
+
+  h2 = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, <span style="color:#ff0;font-weight:bold">260</span>);
+  
+  HeapFree(GetProcessHeap(), <span style="color:#ff0;font-weight:bold">0</span>, h1);
+
+  h3 = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, <span style="color:#ff0;font-weight:bold">520</span>);
+
+  h4 = HeapReAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, h3, <span style="color:#ff0;font-weight:bold">1040</span>);
+
+  HeapFree(GetProcessHeap(), <span style="color:#ff0;font-weight:bold">0</span>, h4);
+  <span style="color:#fff;font-weight:bold">return</span> <span style="color:#ff0;font-weight:bold">0</span>;
+}
+
+<span style="color:#fff;font-weight:bold">int</span> my_virtual_functions(<span style="color:#fff;font-weight:bold">char</span> *buf) {
+  LPVOID lpvBase;
+  DWORD dwPageSize;
+  BOOL bSuccess;
+  SYSTEM_INFO sSysInfo;         <span style="color:#007f7f">// Useful information about the system
+</span><span style="color:#007f7f"></span>
+  GetSystemInfo(&amp;sSysInfo);     <span style="color:#007f7f">// Initialize the structure.
+</span><span style="color:#007f7f"></span>  dwPageSize = sSysInfo.dwPageSize;
+
+  <span style="color:#007f7f">// Reserve pages in the virtual address space of the process.
+</span><span style="color:#007f7f"></span>  lpvBase = VirtualAlloc(
+    <span style="color:#fff;font-weight:bold">NULL</span>,                 <span style="color:#007f7f">// System selects address
+</span><span style="color:#007f7f"></span>    PAGELIMIT*dwPageSize, <span style="color:#007f7f">// Size of allocation
+</span><span style="color:#007f7f"></span>    MEM_RESERVE,          <span style="color:#007f7f">// Allocate reserved pages
+</span><span style="color:#007f7f"></span>    PAGE_NOACCESS);       <span style="color:#007f7f">// Protection = no access
+</span><span style="color:#007f7f"></span>
+  <span style="color:#fff;font-weight:bold">if</span> (lpvBase == <span style="color:#fff;font-weight:bold">NULL</span>)
+    exit(<span style="color:#0ff;font-weight:bold">&#34;VirtualAlloc reserve failed.&#34;</span>);
+
+  bSuccess = VirtualFree(
+    lpvBase,       <span style="color:#007f7f">// Base address of block
+</span><span style="color:#007f7f"></span>    <span style="color:#ff0;font-weight:bold">0</span>,             <span style="color:#007f7f">// Bytes of committed pages
+</span><span style="color:#007f7f"></span>    MEM_RELEASE);  <span style="color:#007f7f">// Decommit the pages
+</span><span style="color:#007f7f"></span>
+  <span style="color:#fff;font-weight:bold">return</span> <span style="color:#ff0;font-weight:bold">0</span>;
+}
+
+<span style="color:#fff;font-weight:bold">int</span> main(<span style="color:#fff;font-weight:bold">void</span>) {
+  my_heap_functions(<span style="color:#0ff;font-weight:bold">&#34;moo&#34;</span>);
+  my_virtual_functions(<span style="color:#0ff;font-weight:bold">&#34;moo&#34;</span>);
+
+  <span style="color:#fff;font-weight:bold">return</span> <span style="color:#ff0;font-weight:bold">0</span>;
+}
+</code></pre></div><p>You can find the <code>Visual Studio</code> project <a href="https://github.com/houseofxyz/DBI/tree/master/ExercisePin2">here</a>. You can play with it a compare the output with what&rsquo;s expected based on <code>ExercisePin2.c</code> source code.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-fallback" data-lang="fallback">C:\pin&gt;pin -t source\tools\WinMallocTracer\Release\WinMallocTracer.dll -symbols 1 -- C:\TARGET\ExercisePin2.exe
+C:\pin&gt; type memprofile.out
+## Memory tracing for PID = 5600 started
+### Listing Symbols
+_enc$textbss$end
+unnamedImageEntryPoint
+main
+my_heap_functions
+my_virtual_functions
+HeapAlloc
+HeapReAlloc
+HeapFree
+GetProcessHeap
+GetSystemInfo
+(...)
+</code></pre></div><p>The full output is <a href="https://github.com/houseofxyz/DBI/tree/master/ExercisePin2.symbols.memprofile.out">here</a>. Since the entry-point function is <code>main</code>, we can simply run the <code>Pintool</code> without passing anything to it.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-fallback" data-lang="fallback">C:\pin&gt;pin -t source\tools\WinMallocTracer\Release\WinMallocTracer.dll -- C:\TARGET\ExercisePin2.exe
+C:\pin&gt; type memprofile.out
+## Memory tracing for PID = 4396 started
+### Started tracing after &#39;main()&#39; call
+[*] RtlAllocateHeap(260)    = 0x41dd30
+[*] RtlAllocateHeap(260)    = 0x41de40
+[*] RtlFreeHeap(0x41dd30)
+[*] RtlAllocateHeap(520)    = 0x41df50
+[*] RtlHeapfree(0x41df50) from RtlHeapRealloc()
+[*] RtlHeapReAlloc(1040)    = 0x41df50
+[*] RtlFreeHeap(0x41df50)
+[*] VirtualAllocEx(327680)    = 0x2410000
+[*] VirtualFreeEx(0x2410000)
+[*] Memory at address 0x41de40 allocated but not freed
+</code></pre></div><p>As we can see, tracing memory calls is tricky, but achievable. I&rsquo;ll try to add a few more things to this <code>WinMallocTracer</code> <code>Pintool</code> in a near future. Keep an eye on <a href="https://github.com/houseofxyz/WinMallocTracer">GitLab</a> if you fancy.</p>
+<h2 id="final-notes">Final notes</h2>
+<p>Playing with a <code>DBI</code> framework is not that hard, as we saw, the challenge lies in doing it right. That is, handle all the corner cases efficiently. Something that looks fairly easy can become very challenging if we are going to do it right. The example tool I chose came from a specific need, and from a vulnerability discovering perspective <code>DBI</code> frameworks are indeed very useful. There&rsquo;s a lot of room for improvement, and I plan to keep working on it.</p>
+<p>Even though it was the <code>Fuzzing</code> subject that brought me here (that is, playing with <code>DBI</code> frameworks) I ended up not talking too much about its relationship. Think that a <code>DBI</code> tool per si won&rsquo;t find many bugs unless you exercise as many code paths as possible. After all, a <code>DBI</code> system only modifies the code that&rsquo;s executed. So, it&rsquo;s easy to understand that we need to combine it with a coverage-guided <code>Fuzzer</code> to discover more bugs (preferably, exploitable).</p>
+<p><code>DBI</code> systems are here to stay, they emerged as a means for bypassing the restrictions imposed by binary code. Or, lack of access to source code. The need to understand, and modify the runtime behavior, of computer programs, is undeniable.</p>
+<p>The field of <code>dynamic binary modification</code> is evolving very fast. New applications and new complex engineering challenges are appearing constantly and <code>static binary patching</code> and <code>hooking</code> are &ldquo;things&rdquo; from the past.</p>
+<p>This post documents the first steps if you want to get into this area. All the code snippets used are available at this <a href="https://github.com/houseofxyz/DBI">GitLab repo</a>. And, an improved version of the <code>WinMallocTracer</code> <code>Pintool</code> is available at this <a href="https://github.com/houseofxyz/WinAllocTracer">GitLab repo</a>.</p>
+<h2 id="references-in-no-particular-order">References (in no particular order)</h2>
+<ul>
+<li><a href="https://en.wikipedia.org/wiki/Pin_(computer_program)">https://en.wikipedia.org/wiki/Pin_(computer_program)</a></li>
+<li><a href="https://en.wikipedia.org/wiki/Dynamic_program_analysis">https://en.wikipedia.org/wiki/Dynamic_program_analysis</a></li>
+<li><a href="https://en.wikipedia.org/wiki/Instrumentation_(computer_programming)">https://en.wikipedia.org/wiki/Instrumentation_(computer_programming)</a></li>
+<li><a href="http://uninformed.org/index.cgi?v=7&amp;a=1&amp;p=3">http://uninformed.org/index.cgi?v=7&amp;a=1&amp;p=3</a></li>
+<li><a href="https://software.intel.com/sites/landingpage/pintool/docs/97619/Pin/html/">https://software.intel.com/sites/landingpage/pintool/docs/97619/Pin/html/</a></li>
+<li><a href="http://www.ic.unicamp.br/~rodolfo/mo801/04-PinTutorial.pdf">http://www.ic.unicamp.br/~rodolfo/mo801/04-PinTutorial.pdf</a></li>
+<li><a href="https://software.intel.com/en-us/articles/pin-a-dynamic-binary-instrumentation-tool">https://software.intel.com/en-us/articles/pin-a-dynamic-binary-instrumentation-tool</a></li>
+<li><a href="https://software.intel.com/sites/default/files/managed/62/f4/cgo2013.pdf">https://software.intel.com/sites/default/files/managed/62/f4/cgo2013.pdf</a></li>
+<li><a href="https://software.intel.com/sites/default/files/m/d/4/1/d/8/pin_tutorial_cgo_ispass_2012.ppt">https://software.intel.com/sites/default/files/m/d/4/1/d/8/pin_tutorial_cgo_ispass_2012.ppt</a></li>
+<li><a href="https://software.intel.com/sites/default/files/m/d/4/1/d/8/Pin_tutorial_cgo_2011_final_1.ppt">https://software.intel.com/sites/default/files/m/d/4/1/d/8/Pin_tutorial_cgo_2011_final_1.ppt</a></li>
+<li><a href="https://software.intel.com/sites/default/files/article/256675/cgo-2010-final.ppt">https://software.intel.com/sites/default/files/article/256675/cgo-2010-final.ppt</a></li>
+<li><a href="https://msdn.microsoft.com/en-gb/magazine/dn818497.aspx">https://msdn.microsoft.com/en-gb/magazine/dn818497.aspx</a> (got a bunch of ideas from this post)</li>
+<li><a href="https://github.com/JonathanSalwan/PinTools">https://github.com/JonathanSalwan/PinTools</a> (mandatory)</li>
+<li><a href="http://shell-storm.org/blog/Taint-analysis-and-pattern-matching-with-Pin/">http://shell-storm.org/blog/Taint-analysis-and-pattern-matching-with-Pin/</a> (mandatory)</li>
+<li><a href="http://shell-storm.org/blog/Binary-analysis-Concolic-execution-with-Pin-and-z3/">http://shell-storm.org/blog/Binary-analysis-Concolic-execution-with-Pin-and-z3/</a></li>
+<li><a href="http://shell-storm.org/blog/In-Memory-fuzzing-with-Pin/">http://shell-storm.org/blog/In-Memory-fuzzing-with-Pin/</a></li>
+<li><a href="https://github.com/jingpu/pintools/blob/master/source/tools/ManualExamples/w_malloctrace.cpp">https://github.com/jingpu/pintools/blob/master/source/tools/ManualExamples/w_malloctrace.cpp</a></li>
+<li><a href="https://github.com/corelan/pin">https://github.com/corelan/pin</a></li>
+<li><a href="http://dynamorio.org/docs/">http://dynamorio.org/docs/</a></li>
+<li><a href="http://dynamorio.org/tutorial.html">http://dynamorio.org/tutorial.html</a></li>
+<li><a href="http://dynamorio.org/pubs.html">http://dynamorio.org/pubs.html</a></li>
+<li><a href="http://dynamorio.org/docs/API_BT.html#sec_decode">http://dynamorio.org/docs/API_BT.html#sec_decode</a></li>
+<li><a href="https://groups.google.com/forum/#!forum/dynamorio-users">https://groups.google.com/forum/#!forum/dynamorio-users</a></li>
+<li><a href="http://dynamorio.org/docs/samples/wrap.c">http://dynamorio.org/docs/samples/wrap.c</a></li>
+<li><a href="https://github.com/DynamoRIO/dynamorio/blob/master/api/samples/ssljack.c">https://github.com/DynamoRIO/dynamorio/blob/master/api/samples/ssljack.c</a></li>
+<li><a href="https://axtaxt.wordpress.com/2014/03/02/implementing-a-simple-hit-tracer-in-dynamorio/">https://axtaxt.wordpress.com/2014/03/02/implementing-a-simple-hit-tracer-in-dynamorio/</a></li>
+<li><a href="https://pdfs.semanticscholar.org/presentation/4415/2007fea2b4f5f3b3f1f66d1d00aa0c88fd9b.pdf">Building Dynamic Instrumentation Tools with DynamoRIO</a></li>
+<li><a href="https://media.blackhat.com/bh-us-11/Diskin/BH_US_11_Diskin_Binary_Instrumentation_Slides.pdf">https://media.blackhat.com/bh-us-11/Diskin/BH_US_11_Diskin_Binary_Instrumentation_Slides.pdf</a></li>
+<li><a href="https://github.com/joxeankoret/membugtool/blob/master/docs/Using%20Binary%20Instrumentation%20for%20Vulnerability%20Discovery%20(or%20even%20mitigation!).pdf">Using Binary Instrumentation for Vulnerability Discovery</a> (mandatory)</li>
+<li><a href="http://shell-storm.org/talks/SecurityDay2015_dynamic_symbolic_execution_Jonathan_Salwan.pdf">Dynamic Binary Analysis and Instrumentation Covering a function using a DSE approach</a> (mandatory)</li>
+<li><a href="http://2011.zeronights.org/files/dmitriyd1g1evdokimov-dbiintro-111202045015-phpapp01.pdf">http://2011.zeronights.org/files/dmitriyd1g1evdokimov-dbiintro-111202045015-phpapp01.pdf</a></li>
+<li><a href="https://qbdi.quarkslab.com/QBDI_34c3.pdf">https://qbdi.quarkslab.com/QBDI_34c3.pdf</a></li>
+<li><a href="https://www.coresecurity.com/system/files/publications/2016/10/Getting%20fun%20with%20Frida-Ekoparty-21-10-2016.pdf">Getting fun with Frida</a> (mandatory)</li>
+<li><a href="https://dyninst.org/sites/default/files/manuals/dyninst/dyninstAPI.pdf">https://dyninst.org/sites/default/files/manuals/dyninst/dyninstAPI.pdf</a></li>
+<li><a href="https://www.frida.re/docs/home/">https://www.frida.re/docs/home/</a></li>
+<li><a href="https://www.frida.re/docs/presentations/">https://www.frida.re/docs/presentations/</a></li>
+<li><a href="https://monosource.github.io/tutorial/2017/01/26/frida-linux-part1/">https://monosource.github.io/tutorial/2017/01/26/frida-linux-part1/</a> (my frida section comes mostly from here)</li>
+<li><a href="https://vicarius.io/blog/wtf-is-frida/">https://vicarius.io/blog/wtf-is-frida/</a></li>
+<li><a href="http://blog.kalleberg.org/post/833101026/live-x86-code-instrumentation-with-frida">http://blog.kalleberg.org/post/833101026/live-x86-code-instrumentation-with-frida</a></li>
+<li><a href="https://www.codemetrix.net/hacking-android-apps-with-frida-1/">https://www.codemetrix.net/hacking-android-apps-with-frida-1/</a></li>
+<li><a href="https://en.wikipedia.org/wiki/Chrome_V8">https://en.wikipedia.org/wiki/Chrome_V8</a></li>
+<li><a href="https://github.com/BinaryAnalysisPlatform/bap-tutorial">https://github.com/BinaryAnalysisPlatform/bap-tutorial</a></li>
+<li><a href="https://www.blackhat.com/docs/eu-17/materials/eu-17-Polino-Hiding-Pins-Artifacts-To-Defeat-Evasive-Malware.pdf">Hiding PIN&rsquo;s Artifacts to Defeat Evasive Malware</a></li>
+<li><a href="https://software.intel.com/en-us/articles/pin-errors-in-2017-update-3-and-4-analysis-tools">https://software.intel.com/en-us/articles/pin-errors-in-2017-update-3-and-4-analysis-tools</a></li>
+<li><a href="https://recon.cx/2018/montreal/schedule/system/event_attachments/attachments/000/000/048/original/RECON-MTL-2018-Pwning_Intel_Pin.pdf">Pwning Intel Pin Reconsidering Intel Pin in Context of Security</a></li>
+<li><a href="https://www.escholar.manchester.ac.uk/api/datastream?publicationPid=uk-ac-man-scw:220490&amp;datastreamId=FULL-TEXT.PDF">Dynamic Program Analysis and Optimization under DynamoRIO</a></li>
+<li><a href="https://bsidesvienna.at/slides/2017/the_art_of_fuzzing.pdf">https://bsidesvienna.at/slides/2017/the_art_of_fuzzing.pdf</a></li>
+<li><a href="https://libraries.io/github/memtt/malt">https://libraries.io/github/memtt/malt</a></li>
+<li><a href="http://3nity.io/~vj/downloads/publications/pldi05_pin.pdf">http://3nity.io/~vj/downloads/publications/pldi05_pin.pdf</a></li>
+<li><a href="http://valgrind.org/docs/valgrind2007.pdf">http://valgrind.org/docs/valgrind2007.pdf</a></li>
+<li><a href="http://groups.csail.mit.edu/commit/papers/03/RIO-adaptive-CGO03.pdf">http://groups.csail.mit.edu/commit/papers/03/RIO-adaptive-CGO03.pdf</a></li>
+<li><a href="http://groups.csail.mit.edu/commit/papers/01/RIO-FDDO.pdf">http://groups.csail.mit.edu/commit/papers/01/RIO-FDDO.pdf</a></li>
+<li><a href="http://shell-storm.org/talks/SSTIC2015_English_slide_detailed_version_Triton_Concolic_Execution_FrameWork_FSaudel_JSalwan.pdf">Triton Concolic Execution Framework</a></li>
+<li><a href="https://www.cc.gatech.edu/~orso/papers/clause.li.orso.ISSTA07.pdf">https://www.cc.gatech.edu/~orso/papers/clause.li.orso.ISSTA07.pdf</a></li>
+<li><a href="http://www-leland.stanford.edu/class/cs343/resources/shadow-memory2007.pdf">http://www-leland.stanford.edu/class/cs343/resources/shadow-memory2007.pdf</a></li>
+<li><a href="http://www.burningcutlery.com/derek/docs/drmem-CGO11.pdf">http://www.burningcutlery.com/derek/docs/drmem-CGO11.pdf</a></li>
+<li><a href="http://valgrind.org/docs/iiswc2006.pdf">http://valgrind.org/docs/iiswc2006.pdf</a></li>
+<li><a href="https://pdfs.semanticscholar.org/1156/5da78c06a94c1fc8a0ff3a8d710cb9a5d450.pdf">https://pdfs.semanticscholar.org/1156/5da78c06a94c1fc8a0ff3a8d710cb9a5d450.pdf</a></li>
+<li><a href="http://homepages.dcc.ufmg.br/~fernando/publications/papers_pt/Tymburiba15Tools.pdf">http://homepages.dcc.ufmg.br/~fernando/publications/papers_pt/Tymburiba15Tools.pdf</a></li>
+<li><a href="http://delivery.acm.org/10.1145/3030000/3029812/p219-elsabagh.pdf">http://delivery.acm.org/10.1145/3030000/3029812/p219-elsabagh.pdf</a></li>
+<li><a href="http://sharcs-project.eu/m/filer_public/74/5c/745c0bf6-7636-405f-86e6-089ac630f0d2/patharmor_ccs15.pdf">http://sharcs-project.eu/m/filer_public/74/5c/745c0bf6-7636-405f-86e6-089ac630f0d2/patharmor_ccs15.pdf</a></li>
+<li><a href="https://www.bodden.de/pubs/fb2016ropocop.pdf">https://www.bodden.de/pubs/fb2016ropocop.pdf</a></li>
+<li><a href="https://arxiv.org/pdf/1502.03245.pdf">https://arxiv.org/pdf/1502.03245.pdf</a></li>
+<li><a href="https://suif.stanford.edu/papers/vmi-ndss03.pdf">https://suif.stanford.edu/papers/vmi-ndss03.pdf</a></li>
+<li><a href="https://recon.cx/2012/schedule/attachments/42_FalconRiva_2012.pdf">https://recon.cx/2012/schedule/attachments/42_FalconRiva_2012.pdf</a></li>
+<li><a href="https://hackinparis.com/data/slides/2013/slidesricardorodriguez.pdf">https://hackinparis.com/data/slides/2013/slidesricardorodriguez.pdf</a></li>
+<li><a href="http://anti-reversing.com/Downloads/HES_2011_Presentations/Black%20Box%20Auditing%20Adobe%20Shockwave%20-%20Aaron%20Portnoy%20&amp;%20Logan%20Brown.pdf">Black Box Auditing Adobe Shockwave</a></li>
+<li><a href="https://www.blackhat.com/presentations/bh-usa-07/Quist_and_Valsmith/Whitepaper/bh-usa-07-quist_and_valsmith-WP.pdf">Covert Debugging Circumventing Software Armoring Techniques</a></li>
+<li><a href="http://public.avast.com/caro2011/Daniel%20Radu%20and%20Bruce%20Dang%20-%20Shellcode%20analysis%20using%20dynamic%20binary%20instrumentation.pdf">Shellcode analysis using dynamic binary instrumentation</a></li>
+<li><a href="http://taviso.decsystem.org/making_software_dumber.pdf">http://taviso.decsystem.org/making_software_dumber.pdf</a></li>
+<li><a href="http://web.cs.iastate.edu/~weile/cs513x/2018spring/taintanalysis.pdf">http://web.cs.iastate.edu/~weile/cs513x/2018spring/taintanalysis.pdf</a></li>
+<li><a href="https://www.researchgate.net/publication/220796366_Hybrid_analysis_of_executables_to_detect_security_vulnerabilities">Hybrid analysis of executables to detect security vulnerabilities</a></li>
+<li><a href="https://deepsec.net/docs/Slides/2010/DeepSec_2010_Tripoux_Reverse_Engineering_of_malware_packers_for_dummies.pdf">Tripoux Reverse Engineering Of Malware Packers For Dummies</a></li>
+<li><a href="https://pdfs.semanticscholar.org/presentation/c135/68c933ea8f6a91db67a103715fd1d4ce2253.pdf">https://pdfs.semanticscholar.org/presentation/c135/68c933ea8f6a91db67a103715fd1d4ce2253.pdf</a></li>
+<li><a href="https://code.google.com/archive/p/devilheart/">https://code.google.com/archive/p/devilheart/</a></li>
+<li><a href="http://groups.csail.mit.edu/commit/papers/02/RIO-security-usenix.pdf">http://groups.csail.mit.edu/commit/papers/02/RIO-security-usenix.pdf</a></li>
+<li><a href="http://pages.cs.wisc.edu/~madhurm/pindb/pindb.pdf">http://pages.cs.wisc.edu/~madhurm/pindb/pindb.pdf</a></li>
+<li><a href="https://www.usenix.org/legacy/event/osdi10/tech/full_papers/Enck.pdf">https://www.usenix.org/legacy/event/osdi10/tech/full_papers/Enck.pdf</a></li>
+<li><a href="https://deepsec.net/docs/Slides/2009/DeepSec_2009_Daniel_Reynaud_-_Deobfuscation_Unpacking.pdf">https://deepsec.net/docs/Slides/2009/DeepSec_2009_Daniel_Reynaud_-_Deobfuscation_Unpacking.pdf</a></li>
+<li><a href="http://fmv.jku.at/master/Holzleiter-MasterThesis-2009.pdf">http://fmv.jku.at/master/Holzleiter-MasterThesis-2009.pdf</a></li>
+<li><a href="http://csl.cs.ucf.edu/debugging/user_guide.html">http://csl.cs.ucf.edu/debugging/user_guide.html</a></li>
+<li><a href="http://bitblaze.cs.berkeley.edu/papers/sweeper.pdf">http://bitblaze.cs.berkeley.edu/papers/sweeper.pdf</a></li>
+<li><a href="http://www.ece.neu.edu/groups/nucar/publications/ASSISD06moffie.pdf">http://www.ece.neu.edu/groups/nucar/publications/ASSISD06moffie.pdf</a></li>
+<li><a href="https://events.ccc.de/congress/2009/Fahrplan/attachments/1430_secuBT.pdf">https://events.ccc.de/congress/2009/Fahrplan/attachments/1430_secuBT.pdf</a></li>
+<li><a href="https://recon.cx/2010/slides/Recon2010-UnderStaningSwizzorObfuscation.pdf">https://recon.cx/2010/slides/Recon2010-UnderStaningSwizzorObfuscation.pdf</a></li>
+<li><a href="http://www.dtic.mil/dtic/tr/fulltext/u2/a462289.pdf">http://www.dtic.mil/dtic/tr/fulltext/u2/a462289.pdf</a></li>
+<li><a href="https://scholarworks.iupui.edu/bitstream/handle/1805/8807/Hill_2015_pin.pdf?sequence=1">Pin++: A Object-oriented Framework for Writing Pintools</a></li>
+<li><a href="https://media.blackhat.com/bh-eu-11/Mihai_Chiriac/BlackHat_EU_2011_Chiriac_Rootkit_detection-Slides.pdf">Rootkit detection via Kernel Code Tunneling</a></li>
+<li><a href="https://media.blackhat.com/bh-eu-11/Mihai_Chiriac/BlackHat_EU_2011_Chiriac_Rootkit_detection-WP.pdf">https://media.blackhat.com/bh-eu-11/Mihai_Chiriac/BlackHat_EU_2011_Chiriac_Rootkit_detection-WP.pdf</a></li>
+<li><a href="https://www.cc.gatech.edu/~orso/papers/clause.li.orso.ISSTA07.pdf">https://www.cc.gatech.edu/~orso/papers/clause.li.orso.ISSTA07.pdf</a></li>
+<li><a href="https://recon.cx/2014/slides/pinpoint_control_for_analyzing_malware_recon2014_jjones.pdf">https://recon.cx/2014/slides/pinpoint_control_for_analyzing_malware_recon2014_jjones.pdf</a></li>
+<li><a href="https://arxiv.org/pdf/1503.01186.pdf">https://arxiv.org/pdf/1503.01186.pdf</a></li>
+<li><a href="https://code.google.com/archive/p/tartetatintools/">https://code.google.com/archive/p/tartetatintools/</a></li>
+<li><a href="https://github.com/0xPhoeniX/MazeWalker">https://github.com/0xPhoeniX/MazeWalker</a></li>
+<li><a href="https://recon.cx/2017/montreal/resources/slides/RECON-MTL-2017-MazeWalker.pdf">https://recon.cx/2017/montreal/resources/slides/RECON-MTL-2017-MazeWalker.pdf</a></li>
+<li><a href="https://github.com/poxyran/misc/blob/master/frida-heap-trace.py">https://github.com/poxyran/misc/blob/master/frida-heap-trace.py</a></li>
+<li><a href="https://github.com/OALabs/frida-extract">https://github.com/OALabs/frida-extract</a></li>
+<li><a href="https://github.com/Nightbringer21/fridump">https://github.com/Nightbringer21/fridump</a></li>
+<li><a href="https://edmcman.github.io/papers/oakland10.pdf">https://edmcman.github.io/papers/oakland10.pdf</a></li>
+<li><a href="https://edmcman.github.io/pres/oakland10.pdf">https://edmcman.github.io/pres/oakland10.pdf</a></li>
+<li><a href="https://github.com/falconre/falcon">https://github.com/falconre/falcon</a></li>
+<li><a href="http://reversing.io/posts/palindrome-progress/">http://reversing.io/posts/palindrome-progress/</a></li>
+<li>[https://www.blackhat.com/docs/us-16/materials/us-16-Mariani-Pindemonium-A-Dbi-Based-Generic-Unpacker-For-Windows-Executables-wp.pdf](PinDemonium: a DBI-based generic unpacker for Windows executables)</li>
+<li><a href="https://www.reddit.com/r/REMath/comments/8ml1ep/books_on_program_analysis/">https://www.reddit.com/r/REMath/comments/8ml1ep/books_on_program_analysis/</a></li>
+<li><a href="http://bitblaze.cs.berkeley.edu/temu.html">http://bitblaze.cs.berkeley.edu/temu.html</a></li>
+<li><a href="https://code.google.com/archive/p/flayer/">https://code.google.com/archive/p/flayer/</a></li>
+<li><a href="https://resources.infosecinstitute.com/pin-dynamic-binary-instrumentation-framework/">https://resources.infosecinstitute.com/pin-dynamic-binary-instrumentation-framework/</a></li>
+<li><a href="http://www.ckluk.org/ck/papers/pin_ieeecomputer10.pdf">http://www.ckluk.org/ck/papers/pin_ieeecomputer10.pdf</a></li>
+<li><a href="http://joxeankoret.com/blog/2012/11/04/a-simple-pin-tool-unpacker-for-the-linux-version-of-skype/">A simple PIN tool unpacker for the Linux version of Skype</a> (mandatory)</li>
+<li><a href="http://www.msreverseengineering.com/program-analysis-reading-list/">http://www.msreverseengineering.com/program-analysis-reading-list/</a> (mandatory)</li>
+<li><a href="https://www.amazon.co.uk/gp/product/1608454584/">Dynamic Binary Modifications: Tools, Techniques &amp; Applications</a> (mandatory)</li>
+<li><a href="https://riot.im/app/#/room/#programanalysis:disroot.org">https://riot.im/app/#/room/#programanalysis:disroot.org</a></li>
+<li><a href="https://github.com/wapiflapi/villoc/blob/master/pintool/pintool.cpp">https://github.com/wapiflapi/villoc/blob/master/pintool/pintool.cpp</a></li>
+<li><a href="http://www.computerix.info/skripten/mem-bugs.pdf">http://www.computerix.info/skripten/mem-bugs.pdf</a></li>
+<li><a href="https://en.wikibooks.org/wiki/Linux_Applications_Debugging_Techniques/Leaks">https://en.wikibooks.org/wiki/Linux_Applications_Debugging_Techniques/Leaks</a></li>
+<li><a href="https://en.wikipedia.org/wiki/Memory_debugger">https://en.wikipedia.org/wiki/Memory_debugger</a></li>
+<li><a href="https://nebelwelt.net/publications/students/11fs-kravina-lightweight_memory_tracing.pdf">https://nebelwelt.net/publications/students/11fs-kravina-lightweight_memory_tracing.pdf</a></li>
+<li><a href="https://panthema.net/2013/malloc_count/">https://panthema.net/2013/malloc_count/</a></li>
+<li><a href="http://www.burningcutlery.com/derek/docs/drmem-CGO11.pdf">http://www.burningcutlery.com/derek/docs/drmem-CGO11.pdf</a></li>
+<li><a href="https://github.com/DataChi/memdb">https://github.com/DataChi/memdb</a></li>
+<li><a href="https://hshrzd.wordpress.com/2018/07/16/how-to-compile-a-pin-tool-using-visual-studio-2017/">https://hshrzd.wordpress.com/2018/07/16/how-to-compile-a-pin-tool-using-visual-studio-2017/</a></li>
+</ul>
+<h5 id="videos">Videos</h5>
+<ul>
+<li><a href="https://www.youtube.com/watch?v=Zt74lOuU6zc">Implementing an LLVM based Dynamic Binary Instrumentation framework</a></li>
+<li><a href="https://www.youtube.com/watch?v=IeMCCZD5kVA">DEF CON 15 - Quist and Valsmith - Covert Debugging</a></li>
+<li><a href="https://www.youtube.com/watch?v=Ytw4Bz1gTzY">HIRBSecConf 2009 - Travis Ormandy - Making Software Dumber</a></li>
+<li><a href="https://www.youtube.com/watch?v=uc1mbN9EJKQ">Ole André Vadla Ravnås - Frida: The engineering behind the reverse-engineering</a></li>
+<li><a href="https://www.youtube.com/watch?v=V-DiwxoeXMs">Finding security vulnerabilities with modern fuzzing techniques (RuhrSec 2018)</a> (multiple references to dynamic binary instrumentation)</li>
+</ul>
+
+      </div>
+
+
+      <footer>
+        
+
+
+        
+        
+        
+      </footer>
+    </article>
+
+    
+  </section>
+
+      </div>
+
+      
+
+    </main>
+
+    
+      
+        
+        <script src="/js/dark-mode.min.0213e1773e6d1c5a644f847c67a6f8abac49a3776e2976f6008038af8c5b76a1.js"></script>
+      
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+  </body>
+
+</html>

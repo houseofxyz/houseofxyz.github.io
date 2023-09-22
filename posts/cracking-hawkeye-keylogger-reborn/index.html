@@ -1,0 +1,1174 @@
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Language" content="en">
+
+    
+    <meta name="description" content="I had never heard of HawkEye Keylogger until I&rsquo;ve read the following blog post from Trustwave. I&rsquo;ve found the amount of features quite interesting and I was curious to have a closer look at the source code.
+After some research it seems this keylogger has been successfully used in some campaigns in the pastand it is still being actively used.
+Actually HawkEye is best known in the AV industry by &#39;Golroted&#39;.">
+    <meta name="keywords" content="homepage, blog, reversing, binary exploitation, kernel, hypervisor, containers">
+
+    <meta name="twitter:card" content="summary"/>
+<meta name="twitter:title" content="Cracking HawkEye Keylogger Reborn"/>
+<meta name="twitter:description" content="I had never heard of HawkEye Keylogger until I&rsquo;ve read the following blog post from Trustwave. I&rsquo;ve found the amount of features quite interesting and I was curious to have a closer look at the source code.
+After some research it seems this keylogger has been successfully used in some campaigns in the pastand it is still being actively used.
+Actually HawkEye is best known in the AV industry by &#39;Golroted&#39;."/>
+
+    <meta property="og:title" content="Cracking HawkEye Keylogger Reborn" />
+<meta property="og:description" content="I had never heard of HawkEye Keylogger until I&rsquo;ve read the following blog post from Trustwave. I&rsquo;ve found the amount of features quite interesting and I was curious to have a closer look at the source code.
+After some research it seems this keylogger has been successfully used in some campaigns in the pastand it is still being actively used.
+Actually HawkEye is best known in the AV industry by &#39;Golroted&#39;." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="http://deniable.org/posts/cracking-hawkeye-keylogger-reborn/" />
+<meta property="article:published_time" content="2016-08-04T12:41:23+01:00" />
+<meta property="article:modified_time" content="2016-08-04T12:41:23+01:00" /><meta property="og:site_name" content="shut up and hack" />
+
+
+    <title>
+  Cracking HawkEye Keylogger Reborn · shut up and hack
+</title>
+
+    
+      <link rel="canonical" href="http://deniable.org/posts/cracking-hawkeye-keylogger-reborn/">
+    
+
+    <link rel="preconnect" href="https://fonts.gstatic.com">
+    <link href="https://fonts.googleapis.com/css?family=Lato:400,700%7CMerriweather:300,700%7CSource+Code+Pro:400,700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fork-awesome@1.1.7/css/fork-awesome.min.css"
+      integrity="sha256-gsmEoJAws/Kd3CjuOQzLie5Q3yshhvmo7YNtBG7aaEY=" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/normalize.css@8/normalize.min.css">
+    
+      
+      
+      <link rel="stylesheet" href="/css/coder.min.15d3dcd7d56ff7df8a54a0659da83058d38fb1814fa8dad387efc92034b70def.css" integrity="sha256-FdPc19Vv99&#43;KVKBlnagwWNOPsYFPqNrTh&#43;/JIDS3De8=" crossorigin="anonymous" media="screen" />
+    
+
+    
+
+    
+      
+        
+        
+        <link rel="stylesheet" href="/css/coder-dark.min.126ad3988d46bdae6217a11105b53c9662bca05f39d42d3c0fb366919d334620.css" integrity="sha256-EmrTmI1Gva5iF6ERBbU8lmK8oF851C08D7NmkZ0zRiA=" crossorigin="anonymous" media="screen" />
+      
+    
+
+    
+
+    
+
+    <link rel="icon" type="image/png" href="/images/favicon-32x32.png" sizes="32x32">
+    <link rel="icon" type="image/png" href="/images/favicon-16x16.png" sizes="16x16">
+
+    <link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon.png">
+
+    
+
+    <meta name="generator" content="Hugo 0.74.3" />
+  </head>
+
+  
+  
+    
+  
+  <body class="colorscheme-dark"
+        onload=""
+  >
+    
+<div class="float-container">
+    <a id="dark-mode-toggle" class="colorscheme-toggle">
+        <i class="fa fa-adjust fa-fw" aria-hidden="true"></i>
+    </a>
+</div>
+
+
+    <main class="wrapper">
+      <nav class="navigation">
+  <section class="container">
+    <a class="navigation-title" href="/">
+      shut up and hack
+    </a>
+    
+      <input type="checkbox" id="menu-toggle" />
+      <label class="menu-button float-right" for="menu-toggle">
+        <i class="fa fa-bars fa-fw" aria-hidden="true"></i>
+      </label>
+      <ul class="navigation-list">
+        
+          
+            <li class="navigation-item">
+              <a class="navigation-link" href="/posts/">Blog</a>
+            </li>
+          
+            <li class="navigation-item">
+              <a class="navigation-link" href="/projects">Projects</a>
+            </li>
+          
+            <li class="navigation-item">
+              <a class="navigation-link" href="/about">About</a>
+            </li>
+          
+        
+        
+      </ul>
+    
+  </section>
+</nav>
+
+
+      <div class="content">
+        
+  <section class="container post">
+    <article>
+      <header>
+        <div class="post-title">
+          <h1 class="title">Cracking HawkEye Keylogger Reborn</h1>
+        </div>
+        <div class="post-meta">
+          <div class="date">
+            <span class="posted-on">
+              <i class="fa fa-calendar" aria-hidden="true"></i>
+              <time datetime='2016-08-04T12:41:23&#43;01:00'>
+                August 4, 2016
+              </time>
+            </span>
+            <span class="reading-time">
+              <i class="fa fa-clock-o" aria-hidden="true"></i>
+              27-minute read
+            </span>
+          </div>
+          
+          
+          
+        </div>
+      </header>
+
+      <div>
+        
+        <p>I had never heard of <code>HawkEye Keylogger</code> until I&rsquo;ve read the following <a href="https://www.trustwave.com/Resources/SpiderLabs-Blog/How-I-Cracked-a-Keylogger-and-Ended-Up-in-Someone-s-Inbox">blog post</a> from <code>Trustwave</code>. I&rsquo;ve found the amount of features quite interesting and I was curious to have a closer look at the source code.</p>
+<p>After some research it seems this <code>keylogger</code> has been successfully used in some campaigns in the <!-- raw HTML omitted -->past<!-- raw HTML omitted --> and it is still being actively <!-- raw HTML omitted -->used<!-- raw HTML omitted -->.</p>
+<p>Actually <code>HawkEye</code> is best known in the AV industry by <!-- raw HTML omitted -->'Golroted'<!-- raw HTML omitted -->. In fact it seems that <code>HawkEye</code> was using a different name before, <code>Predator Keylogger</code>, as you can see in this <!-- raw HTML omitted -->post<!-- raw HTML omitted --> from <code>stopmalvertising</code>. I&rsquo;m not sure if the author(s) behind them are the same. The source code might have been shared/sold among some malicious software writers.</p>
+<p>After a bit of digging, I could also find some previous versions of <code>HawkEye</code> cracked. However, it seemed, at first, that the previous versions were a bit different from the latest <code>Reborn</code> version. <code>HawkEye</code> didn&rsquo;t look an advanced piece of malware and the authors/sellers apparently are doing a sloppy job. The lesson here is even a sloppy malware writers can make a profit without hiding themselves that much.</p>
+<p>While searching the web I&rsquo;ve found a few <code>HawkEye</code> technical analysis (see references at the end of this blog post), and while poking around I ended on the <!-- raw HTML omitted -->home page<!-- raw HTML omitted --> of <code>HawkEye</code>. It is sold for more or less <code>$35</code>, depending on each type of license you are interested in. At the time of this writing the home page is down, it should come up again at some point. During the last month I noticed that it goes down and comes back from time to time.</p>
+<p>I noticed one interesting thing though. Maybe due to a misconfiguration (or not) I could download <code>HawkEye Keylogger Reborn</code> and some other malicious software that the same author is selling. From <a href="http://hawkspy.net/hawkeye-keylogger-reborn">http://hawkspy.net/hawkeye-keylogger-reborn/</a> I was redirected to <a href="http://selfypay.org/HawkSpy/">http://selfypay.org/HawkSpy/</a> and&hellip; guess what? All their software belongs to us&hellip;</p>
+<p><img src="/hawkeye/howigotthefile.png" alt=""></p>
+<p>&lsquo;HawkEye Keylogger - Reborn.exe'<!-- raw HTML omitted -->
+<strong>SHA256</strong>: c8164521267263190900e1f62494068e994b053ae720d678da542e80286b5f46</p>
+<p>So I had access to the &ldquo;potential&rdquo; builder and not only to the samples that were collected on the wild and mentioned on the technical articles I&rsquo;ve found. So I decided to have a look and opened it in <code>CFF Explorer</code>.</p>
+<p><img src="/hawkeye/assembly.png" alt=""></p>
+<p><code>CFF Explorer</code> is like <code>PEStudio</code> for <code>.net</code> assemblies and it tells us that this file is indeed a <code>.net</code> binary.</p>
+<h3 id="dynamic-analysis">Dynamic Analysis</h3>
+<p>So I downloaded it and ran it on a VM. No anti-VM techniques were in use, at least none able to detected my <code>VMware</code> based virtual lab. If <code>HawkEye</code> doesn&rsquo;t have access to the Internet the program will throw an <code>Exception</code> and writes a file &lsquo;loader.log&rsquo; on the same directory from where the <code>exe</code> was launched.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-fallback" data-lang="fallback">8/1/2016 6:41:35 PM
+
+The operation has timed out
+   at System.Net.WebClient.DownloadDataInternal(Uri address, WebRequest&amp; request)
+   at System.Net.WebClient.DownloadString(Uri address)
+   at System.Net.WebClient.DownloadString(String address)
+   at HawkEyeKeyloggerReborn.License.DownloadChecksums()
+   at HawkEyeKeyloggerReborn.License.Initialize()
+</code></pre></div><p>Since I was monitoring the DNS queries I could see that it tries to resolve the host &lsquo;seal.nimoru.com&rsquo;. Ok, I fired up my <code>Tor</code> Proxy VM and this time I was presented with a login form, as shown below.</p>
+<p><img src="/hawkeye/netseal.png" alt=""></p>
+<p>I did a quick search for &lsquo;Net Seal&rsquo; (shown in the title bar of the login dialog box) but at this time I didn&rsquo;t find anything (more on this later).</p>
+<h3 id="reverse-engineering-managed-code">Reverse Engineering Managed Code</h3>
+<p>Managed code decompilers are the way to go when analysing <code>.NET</code> assemblies since they allow us to decompile the binary into source code. However, if the binary is obfuscated, this process can be a nightmare. Besides the managed code decompilers are not as amazing as you may think if you are dealing with complex projects. Almost all of them allow you to export the code, even to Visual Studio projects. Getting this projects to compile is a complete different story though. Based on my experience 99% of times it will not build and you have to deal with too many errors. Most of the errors are completely &lsquo;alien&rsquo;. Still, decompilers are great.</p>
+<p>So I loaded <code>HawkEye Keylogger - Reborn.exe</code> in <code>ILSpy</code>, I could see the file was encrypted/obfuscated with a module called <code>MindZero v0.5.0-custom</code>.</p>
+<p><img src="/hawkeye/original.sample.png" alt=""></p>
+<p>I looked around but I couldn&rsquo;t find any reference to <code>MindZero</code> <code>.net</code> code packer/obfuscator or anything close on the Internet. I tried a couple of tools in order to try to identify the packer/obfuscator used. Some wrongly indicated that <!-- raw HTML omitted -->Confuser<!-- raw HTML omitted --> was used.</p>
+<p><img src="/hawkeye/confuser.png" alt=""></p>
+<p>The only methods exposed, as you can see bellow, were <code>ZeroMind()</code>, <code>Zero()</code>, <code>Mind()</code>, <code>Decompress()</code>, and a few others.</p>
+<p><img src="/hawkeye/ZeroMind.png" alt=""></p>
+<p>The method <code>Zero()</code> and <code>ZeroMind()</code> were quite interesting. One of the immediate things I noticed was the use of <code>Reflection</code> and <code>LoadModule</code>. More on this later.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp"><span style="color:#007f7f">// &lt;Module&gt;
+</span><span style="color:#007f7f"></span>[System.STAThread, System.STAThread]
+<span style="color:#fff;font-weight:bold">private</span> <span style="color:#fff;font-weight:bold">static</span> <span style="color:#fff;font-weight:bold">int</span> Zero(string[] array)
+{
+    uint[] array2 = <span style="color:#fff;font-weight:bold">new</span> uint[]
+    {
+        <span style="color:#ff0;font-weight:bold">3154793535u</span>,
+        <span style="color:#ff0;font-weight:bold">2510551337u</span>,
+        <span style="color:#ff0;font-weight:bold">1068474031u</span>,
+        <span style="color:#ff0;font-weight:bold">3134659130u</span>,
+        <span style="color:#ff0;font-weight:bold">1935703431u</span>,
+        <span style="color:#ff0;font-weight:bold">3462704481u</span>,
+        <span style="color:#ff0;font-weight:bold">729329793u</span>,
+(** LARGE ARRAY CUT **)
+        <span style="color:#ff0;font-weight:bold">1847557079u</span>,
+        <span style="color:#ff0;font-weight:bold">2466235288u</span>,
+        <span style="color:#ff0;font-weight:bold">4233368770u</span>,
+        <span style="color:#ff0;font-weight:bold">1709265185u</span>,
+        <span style="color:#ff0;font-weight:bold">3912996699u</span>,
+        <span style="color:#ff0;font-weight:bold">1356851460u</span>
+    };
+    System.Reflection.Assembly executingAssembly = System.Reflection.Assembly.GetExecutingAssembly();
+    System.Reflection.Module manifestModule = executingAssembly.ManifestModule;
+    System.Runtime.InteropServices.GCHandle gCHandle = &lt;Module&gt;.Mind(array2, <span style="color:#ff0;font-weight:bold">640387902u</span>);
+    byte[] array3 = (byte[])gCHandle.Target;
+    System.Reflection.Module module = executingAssembly.LoadModule(<span style="color:#0ff;font-weight:bold">&#34;MZ&#34;</span>, array3);
+    System.Array.Clear(array3, <span style="color:#ff0;font-weight:bold">0</span>, array3.Length);
+    gCHandle.Free();
+    System.Array.Clear(array2, <span style="color:#ff0;font-weight:bold">0</span>, array2.Length);
+    &lt;Module&gt;.key = manifestModule.ResolveSignature(<span style="color:#ff0;font-weight:bold">285212673</span>);
+    System.AppDomain.CurrentDomain.AssemblyResolve += <span style="color:#fff;font-weight:bold">new</span> System.ResolveEventHandler(&lt;Module&gt;.ZeroMind);
+    module.GetTypes();
+    System.Reflection.MethodBase methodBase = module.ResolveMethod((<span style="color:#fff;font-weight:bold">int</span>)&lt;Module&gt;.key[<span style="color:#ff0;font-weight:bold">0</span>] | (<span style="color:#fff;font-weight:bold">int</span>)&lt;Module&gt;.key[<span style="color:#ff0;font-weight:bold">1</span>] &lt;&lt; <span style="color:#ff0;font-weight:bold">8</span> | (<span style="color:#fff;font-weight:bold">int</span>)&lt;Module&gt;.key[<span style="color:#ff0;font-weight:bold">2</span>] &lt;&lt; <span style="color:#ff0;font-weight:bold">16</span> | (<span style="color:#fff;font-weight:bold">int</span>)&lt;Module&gt;.key[<span style="color:#ff0;font-weight:bold">3</span>] &lt;&lt; <span style="color:#ff0;font-weight:bold">24</span>);
+    object[] array4 = <span style="color:#fff;font-weight:bold">new</span> object[methodBase.GetParameters().Length];
+    <span style="color:#fff;font-weight:bold">if</span> (array4.Length != <span style="color:#ff0;font-weight:bold">0</span>)
+    {
+        array4[<span style="color:#ff0;font-weight:bold">0</span>] = array;
+    }
+    object obj = methodBase.Invoke(null, array4);
+    <span style="color:#fff;font-weight:bold">if</span> (obj is <span style="color:#fff;font-weight:bold">int</span>)
+    {
+        <span style="color:#fff;font-weight:bold">return</span> (<span style="color:#fff;font-weight:bold">int</span>)obj;
+    }
+    <span style="color:#fff;font-weight:bold">return</span> <span style="color:#ff0;font-weight:bold">0</span>;
+}
+</code></pre></div><p>After reading quite a lot about <code>.net</code> binaries Reverse Engineering (see the &lsquo;References&rsquo;) I decided to use first a memory dumper and then go from there.</p>
+<p>So I used <code>MegaDumper 1.0 by CodeCracker / SnD</code>. You can find it in some Reverse Engineering Forums. Basically I executed <code>HawkEye Keylogger - Reborn.exe</code>, fired <code>MegaDumper</code>, selected the process corresponding to <code>HawkEye</code> (stuck on the <code>Net Seal</code> login prompt) and selected the option to dump the loaded assembly.</p>
+<p><img src="/hawkeye/megadump.png" alt=""></p>
+<p>The result was an interesting collection of executable and <code>DLL</code> files.</p>
+<p><img src="/hawkeye/megadumper.png" alt=""></p>
+<p>I loaded almost every file in <code>ILSpy</code> and found some interesting things. The &lsquo;Cure.exe&rsquo; was the vacine to <code>HawkEye</code>. Meaning if you infected a computer and you want to clean it you should run this file. Here&rsquo;s the interesting code showing some of the <code>IOCs</code> already mentioned in some of the articles I mentioned before.</p>
+<p><img src="/hawkeye/cure.png" alt=""></p>
+<p>Bellow is the code with the most interesting methods for Blue Teams.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp">        <span style="color:#fff;font-weight:bold">private</span> <span style="color:#fff;font-weight:bold">void</span> Form1_Load(object sender, EventArgs e)
+        {
+            <span style="color:#fff;font-weight:bold">try</span>
+            {
+                <span style="color:#fff;font-weight:bold">this</span>.seekanddestroy(<span style="color:#0ff;font-weight:bold">&#34;vbc&#34;</span>);
+                Thread.Sleep(<span style="color:#ff0;font-weight:bold">300</span>);
+                <span style="color:#fff;font-weight:bold">this</span>.seekanddestroy(<span style="color:#0ff;font-weight:bold">&#34;temp&#34;</span>);
+                Thread.Sleep(<span style="color:#ff0;font-weight:bold">300</span>);
+                <span style="color:#fff;font-weight:bold">this</span>.seekanddestroy(<span style="color:#0ff;font-weight:bold">&#34;Pin&#34;</span>);
+                Thread.Sleep(<span style="color:#ff0;font-weight:bold">300</span>);
+                <span style="color:#fff;font-weight:bold">this</span>.seekanddestroy(<span style="color:#0ff;font-weight:bold">&#34;Windows Update&#34;</span>);
+                Thread.Sleep(<span style="color:#ff0;font-weight:bold">300</span>);
+                <span style="color:#fff;font-weight:bold">this</span>.seekanddestroy(<span style="color:#0ff;font-weight:bold">&#34;WindowsUpdate&#34;</span>);
+                Thread.Sleep(<span style="color:#ff0;font-weight:bold">500</span>);
+                <span style="color:#fff;font-weight:bold">this</span>.seekanddestroy(<span style="color:#0ff;font-weight:bold">&#34;Microsoft&#34;</span>);
+            }
+            <span style="color:#fff;font-weight:bold">catch</span> (Exception expr_83)
+            {
+                ProjectData.SetProjectError(expr_83);
+                ProjectData.ClearProjectError();
+            }
+            <span style="color:#fff;font-weight:bold">try</span>
+            {
+                <span style="color:#fff;font-weight:bold">bool</span> flag = !File.Exists(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) + <span style="color:#0ff;font-weight:bold">&#34;</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">pid.txt&#34;</span>);
+                <span style="color:#fff;font-weight:bold">if</span> (!flag)
+                {
+                    <span style="color:#fff;font-weight:bold">int</span> processId = Conversions.ToInteger(File.ReadAllText(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) + <span style="color:#0ff;font-weight:bold">&#34;</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">pid.txt&#34;</span>));
+                    Process.GetProcessById(processId).Kill();
+                    Thread.Sleep(<span style="color:#ff0;font-weight:bold">500</span>);
+                }
+            }
+            <span style="color:#fff;font-weight:bold">catch</span> (Exception arg_EC_0)
+            {
+                ProjectData.SetProjectError(arg_EC_0);
+                ProjectData.ClearProjectError();
+            }
+            <span style="color:#fff;font-weight:bold">try</span>
+            {
+                <span style="color:#fff;font-weight:bold">bool</span> flag = !File.Exists(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) + <span style="color:#0ff;font-weight:bold">&#34;</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">pidloc.txt&#34;</span>);
+                <span style="color:#fff;font-weight:bold">if</span> (!flag)
+                {
+                    string path = File.ReadAllText(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) + <span style="color:#0ff;font-weight:bold">&#34;</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">pidloc.txt&#34;</span>);
+                    flag = File.Exists(path);
+                    <span style="color:#fff;font-weight:bold">if</span> (flag)
+                    {
+                        File.Delete(path);
+                    }
+                }
+                flag = File.Exists(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) + <span style="color:#0ff;font-weight:bold">&#34;</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">pid.txt&#34;</span>);
+                <span style="color:#fff;font-weight:bold">if</span> (flag)
+                {
+                    File.Delete(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) + <span style="color:#0ff;font-weight:bold">&#34;</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">pid.txt&#34;</span>);
+                }
+                flag = File.Exists(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) + <span style="color:#0ff;font-weight:bold">&#34;</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">pidloc.txt&#34;</span>);
+                <span style="color:#fff;font-weight:bold">if</span> (flag)
+                {
+                    File.Delete(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) + <span style="color:#0ff;font-weight:bold">&#34;</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">pidloc.txt&#34;</span>);
+                }
+            }
+            <span style="color:#fff;font-weight:bold">catch</span> (Exception expr_1B5)
+            {
+                ProjectData.SetProjectError(expr_1B5);
+                ProjectData.ClearProjectError();
+            }
+            Thread <span style="color:#fff;font-weight:bold">thread</span> = <span style="color:#fff;font-weight:bold">new</span> Thread(<span style="color:#fff;font-weight:bold">new</span> ThreadStart(<span style="color:#fff;font-weight:bold">this</span>.builderclean));
+            <span style="color:#fff;font-weight:bold">thread</span>.SetApartmentState(ApartmentState.STA);
+            <span style="color:#fff;font-weight:bold">thread</span>.IsBackground = <span style="color:#fff;font-weight:bold">true</span>;
+            <span style="color:#fff;font-weight:bold">thread</span>.Start();
+            Thread thread2 = <span style="color:#fff;font-weight:bold">new</span> Thread(<span style="color:#fff;font-weight:bold">new</span> ThreadStart(<span style="color:#fff;font-weight:bold">this</span>.serverclean));
+            thread2.SetApartmentState(ApartmentState.STA);
+            thread2.IsBackground = <span style="color:#fff;font-weight:bold">true</span>;
+            thread2.Start();
+            checked
+            {
+                <span style="color:#fff;font-weight:bold">try</span>
+                {
+                    DirectoryInfo directoryInfo = <span style="color:#fff;font-weight:bold">new</span> DirectoryInfo(<span style="color:#0ff;font-weight:bold">&#34;C:</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">Users</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">&#34;</span> + <span style="color:#fff;font-weight:bold">this</span>.User + <span style="color:#0ff;font-weight:bold">&#34;</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">AppData</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">Roaming</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">jagex_cache</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">regPin&#34;</span>);
+                    FileInfo[] files = directoryInfo.GetFiles();
+                    <span style="color:#fff;font-weight:bold">bool</span> flag;
+                    <span style="color:#fff;font-weight:bold">for</span> (<span style="color:#fff;font-weight:bold">int</span> i = <span style="color:#ff0;font-weight:bold">0</span>; i &lt; files.Length; i++)
+                    {
+                        FileInfo fileInfo = files[i];
+                        flag = fileInfo.Extension.Equals(<span style="color:#0ff;font-weight:bold">&#34;.jpeg&#34;</span>);
+                        <span style="color:#fff;font-weight:bold">if</span> (flag)
+                        {
+                            fileInfo.Delete();
+                        }
+                    }
+                    Thread.Sleep(<span style="color:#ff0;font-weight:bold">1000</span>);
+                    flag = Directory.Exists(<span style="color:#0ff;font-weight:bold">&#34;C:</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">Users</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">&#34;</span> + <span style="color:#fff;font-weight:bold">this</span>.User + <span style="color:#0ff;font-weight:bold">&#34;</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">AppData</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">Roaming</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">jagex_cache</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">regPin&#34;</span>);
+                    <span style="color:#fff;font-weight:bold">if</span> (flag)
+                    {
+                        Directory.Delete(<span style="color:#0ff;font-weight:bold">&#34;C:</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">Users</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">&#34;</span> + <span style="color:#fff;font-weight:bold">this</span>.User + <span style="color:#0ff;font-weight:bold">&#34;</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">AppData</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">Roaming</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">jagex_cache</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">regPin&#34;</span>);
+                    }
+                    DirectoryInfo directoryInfo2 = <span style="color:#fff;font-weight:bold">new</span> DirectoryInfo(<span style="color:#0ff;font-weight:bold">&#34;C:</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">Users</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">&#34;</span> + <span style="color:#fff;font-weight:bold">this</span>.User + <span style="color:#0ff;font-weight:bold">&#34;</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">AppData</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">Roaming</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">jagex_cache</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">reg&#34;</span>);
+                    FileInfo[] files2 = directoryInfo2.GetFiles();
+                    <span style="color:#fff;font-weight:bold">for</span> (<span style="color:#fff;font-weight:bold">int</span> j = <span style="color:#ff0;font-weight:bold">0</span>; j &lt; files2.Length; j++)
+                    {
+                        FileInfo fileInfo2 = files2[j];
+                        flag = fileInfo2.Extension.Equals(<span style="color:#0ff;font-weight:bold">&#34;.jpeg&#34;</span>);
+                        <span style="color:#fff;font-weight:bold">if</span> (flag)
+                        {
+                            fileInfo2.Delete();
+                        }
+                    }
+                    Thread.Sleep(<span style="color:#ff0;font-weight:bold">3000</span>);
+                    flag = Directory.Exists(<span style="color:#0ff;font-weight:bold">&#34;C:</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">Users</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">&#34;</span> + <span style="color:#fff;font-weight:bold">this</span>.User + <span style="color:#0ff;font-weight:bold">&#34;</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">AppData</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">Roaming</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">jagex_cache</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">reg&#34;</span>);
+                    <span style="color:#fff;font-weight:bold">if</span> (flag)
+                    {
+                        Directory.Delete(<span style="color:#0ff;font-weight:bold">&#34;C:</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">Users</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">&#34;</span> + <span style="color:#fff;font-weight:bold">this</span>.User + <span style="color:#0ff;font-weight:bold">&#34;</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">AppData</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">Roaming</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">jagex_cache</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">reg&#34;</span>);
+                    }
+                    DirectoryInfo directoryInfo3 = <span style="color:#fff;font-weight:bold">new</span> DirectoryInfo(Path.GetTempPath() + <span style="color:#0ff;font-weight:bold">&#34;screens&#34;</span>);
+                    FileInfo[] files3 = directoryInfo3.GetFiles();
+                    <span style="color:#fff;font-weight:bold">for</span> (<span style="color:#fff;font-weight:bold">int</span> k = <span style="color:#ff0;font-weight:bold">0</span>; k &lt; files3.Length; k++)
+                    {
+                        FileInfo fileInfo3 = files3[k];
+                        flag = fileInfo3.Extension.Equals(<span style="color:#0ff;font-weight:bold">&#34;.jpeg&#34;</span>);
+                        <span style="color:#fff;font-weight:bold">if</span> (flag)
+                        {
+                            fileInfo3.Delete();
+                        }
+                    }
+                    Thread.Sleep(<span style="color:#ff0;font-weight:bold">3000</span>);
+                    flag = Directory.Exists(Path.GetTempPath() + <span style="color:#0ff;font-weight:bold">&#34;screens&#34;</span>);
+                    <span style="color:#fff;font-weight:bold">if</span> (flag)
+                    {
+                        Directory.Delete(Path.GetTempPath() + <span style="color:#0ff;font-weight:bold">&#34;screens&#34;</span>);
+                    }
+                }
+                <span style="color:#fff;font-weight:bold">catch</span> (Exception expr_40F)
+                {
+                    ProjectData.SetProjectError(expr_40F);
+                    ProjectData.ClearProjectError();
+                }
+                <span style="color:#fff;font-weight:bold">this</span>.SelfDestruct();
+            }
+        }
+
+        <span style="color:#fff;font-weight:bold">public</span> <span style="color:#fff;font-weight:bold">void</span> builderclean()
+        {
+            <span style="color:#fff;font-weight:bold">try</span>
+            {
+                <span style="color:#fff;font-weight:bold">bool</span> flag = File.Exists(<span style="color:#fff;font-weight:bold">this</span>.Tempclean + <span style="color:#0ff;font-weight:bold">&#34;temp.exe&#34;</span>);
+                <span style="color:#fff;font-weight:bold">if</span> (flag)
+                {
+                    File.Delete(<span style="color:#fff;font-weight:bold">this</span>.Tempclean + <span style="color:#0ff;font-weight:bold">&#34;temp.exe&#34;</span>);
+                }
+                flag = File.Exists(Application.StartupPath + <span style="color:#0ff;font-weight:bold">&#34;</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">assemblychange.exe&#34;</span>);
+                <span style="color:#fff;font-weight:bold">if</span> (flag)
+                {
+                    File.Delete(Application.StartupPath + <span style="color:#0ff;font-weight:bold">&#34;</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">assemblychange.exe&#34;</span>);
+                }
+                Thread.Sleep(<span style="color:#ff0;font-weight:bold">1000</span>);
+                flag = File.Exists(Application.StartupPath + <span style="color:#0ff;font-weight:bold">&#34;</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">assemblychange.res&#34;</span>);
+                <span style="color:#fff;font-weight:bold">if</span> (flag)
+                {
+                    File.Delete(Application.StartupPath + <span style="color:#0ff;font-weight:bold">&#34;</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">assemblychange.res&#34;</span>);
+                }
+                flag = File.Exists(Application.StartupPath + <span style="color:#0ff;font-weight:bold">&#34;</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">ResHacker.exe&#34;</span>);
+                <span style="color:#fff;font-weight:bold">if</span> (flag)
+                {
+                    File.Delete(Application.StartupPath + <span style="color:#0ff;font-weight:bold">&#34;</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">ResHacker.exe&#34;</span>);
+                }
+                Thread.Sleep(<span style="color:#ff0;font-weight:bold">1000</span>);
+                flag = File.Exists(Application.StartupPath + <span style="color:#0ff;font-weight:bold">&#34;</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">ResHacker.ini&#34;</span>);
+                <span style="color:#fff;font-weight:bold">if</span> (flag)
+                {
+                    File.Delete(Application.StartupPath + <span style="color:#0ff;font-weight:bold">&#34;</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">ResHacker.ini&#34;</span>);
+                }
+                flag = File.Exists(Application.StartupPath + <span style="color:#0ff;font-weight:bold">&#34;</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">ResHacker.log&#34;</span>);
+                <span style="color:#fff;font-weight:bold">if</span> (flag)
+                {
+                    File.Delete(Application.StartupPath + <span style="color:#0ff;font-weight:bold">&#34;</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">ResHacker.log&#34;</span>);
+                }
+            }
+            <span style="color:#fff;font-weight:bold">catch</span> (Exception expr_12A)
+            {
+                ProjectData.SetProjectError(expr_12A);
+                ProjectData.ClearProjectError();
+            }
+        }
+
+        <span style="color:#fff;font-weight:bold">public</span> <span style="color:#fff;font-weight:bold">void</span> serverclean()
+        {
+            <span style="color:#fff;font-weight:bold">try</span>
+            {
+                <span style="color:#fff;font-weight:bold">bool</span> flag = File.Exists(Environment.GetFolderPath(Environment.SpecialFolder.Startup) + <span style="color:#0ff;font-weight:bold">&#34;</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">WindowsUpdate.exe&#34;</span>);
+                <span style="color:#fff;font-weight:bold">if</span> (flag)
+                {
+                    File.Delete(Environment.GetFolderPath(Environment.SpecialFolder.Startup) + <span style="color:#0ff;font-weight:bold">&#34;</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">WindowsUpdate.exe&#34;</span>);
+                }
+                flag = File.Exists(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) + <span style="color:#0ff;font-weight:bold">&#34;</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">WindowsUpdate.exe&#34;</span>);
+                <span style="color:#fff;font-weight:bold">if</span> (flag)
+                {
+                    File.Delete(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) + <span style="color:#0ff;font-weight:bold">&#34;</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">WindowsUpdate.exe&#34;</span>);
+                }
+                flag = File.Exists(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) + <span style="color:#0ff;font-weight:bold">&#34;</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">Windows Update.exe&#34;</span>);
+                <span style="color:#fff;font-weight:bold">if</span> (flag)
+                {
+                    File.Delete(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) + <span style="color:#0ff;font-weight:bold">&#34;</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">Windows Update.exe&#34;</span>);
+                }
+                flag = File.Exists(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) + <span style="color:#0ff;font-weight:bold">&#34;</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">Pin.exe&#34;</span>);
+                <span style="color:#fff;font-weight:bold">if</span> (flag)
+                {
+                    File.Delete(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) + <span style="color:#0ff;font-weight:bold">&#34;</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">Pin.exe&#34;</span>);
+                }
+                Thread.Sleep(<span style="color:#ff0;font-weight:bold">1000</span>);
+                flag = File.Exists(Path.GetTempPath() + <span style="color:#0ff;font-weight:bold">&#34;SysInfo.txt&#34;</span>);
+                <span style="color:#fff;font-weight:bold">if</span> (flag)
+                {
+                    File.Delete(Path.GetTempPath() + <span style="color:#0ff;font-weight:bold">&#34;SysInfo.txt&#34;</span>);
+                }
+                flag = File.Exists(<span style="color:#fff;font-weight:bold">this</span>.Tempclean + <span style="color:#0ff;font-weight:bold">&#34;wallet.dat&#34;</span>);
+                <span style="color:#fff;font-weight:bold">if</span> (flag)
+                {
+                    File.Delete(<span style="color:#fff;font-weight:bold">this</span>.Tempclean + <span style="color:#0ff;font-weight:bold">&#34;wallet.dat&#34;</span>);
+                }
+                flag = File.Exists(<span style="color:#fff;font-weight:bold">this</span>.Tempclean + MyProject.Computer.Name + <span style="color:#0ff;font-weight:bold">&#34;_wallet.dat&#34;</span>);
+                <span style="color:#fff;font-weight:bold">if</span> (flag)
+                {
+                    File.Delete(<span style="color:#fff;font-weight:bold">this</span>.Tempclean + MyProject.Computer.Name + <span style="color:#0ff;font-weight:bold">&#34;_wallet.dat&#34;</span>);
+                }
+                flag = File.Exists(<span style="color:#fff;font-weight:bold">this</span>.Tempclean + <span style="color:#0ff;font-weight:bold">&#34;firstfile.exe&#34;</span>);
+                <span style="color:#fff;font-weight:bold">if</span> (flag)
+                {
+                    File.Delete(<span style="color:#fff;font-weight:bold">this</span>.Tempclean + <span style="color:#0ff;font-weight:bold">&#34;firstfile.exe&#34;</span>);
+                }
+                Thread.Sleep(<span style="color:#ff0;font-weight:bold">1000</span>);
+                flag = File.Exists(<span style="color:#fff;font-weight:bold">this</span>.Tempclean + <span style="color:#0ff;font-weight:bold">&#34;firstfile.txt&#34;</span>);
+                <span style="color:#fff;font-weight:bold">if</span> (flag)
+                {
+                    File.Delete(<span style="color:#fff;font-weight:bold">this</span>.Tempclean + <span style="color:#0ff;font-weight:bold">&#34;firstfile.txt&#34;</span>);
+                }
+                flag = File.Exists(<span style="color:#fff;font-weight:bold">this</span>.Tempclean + <span style="color:#0ff;font-weight:bold">&#34;secondfile.exe&#34;</span>);
+                <span style="color:#fff;font-weight:bold">if</span> (flag)
+                {
+                    File.Delete(<span style="color:#fff;font-weight:bold">this</span>.Tempclean + <span style="color:#0ff;font-weight:bold">&#34;secondfile.exe&#34;</span>);
+                }
+                flag = File.Exists(<span style="color:#fff;font-weight:bold">this</span>.Tempclean + <span style="color:#0ff;font-weight:bold">&#34;secondfile.txt&#34;</span>);
+                <span style="color:#fff;font-weight:bold">if</span> (flag)
+                {
+                    File.Delete(<span style="color:#fff;font-weight:bold">this</span>.Tempclean + <span style="color:#0ff;font-weight:bold">&#34;secondfile.txt&#34;</span>);
+                }
+                Thread.Sleep(<span style="color:#ff0;font-weight:bold">1000</span>);
+                flag = File.Exists(Path.GetTempPath() + <span style="color:#0ff;font-weight:bold">&#34;CLog.txt&#34;</span>);
+                <span style="color:#fff;font-weight:bold">if</span> (flag)
+                {
+                    File.Delete(Path.GetTempPath() + <span style="color:#0ff;font-weight:bold">&#34;CLog.txt&#34;</span>);
+                }
+                flag = File.Exists(<span style="color:#fff;font-weight:bold">this</span>.Tempclean + <span style="color:#0ff;font-weight:bold">&#34;holdermail.txt&#34;</span>);
+                <span style="color:#fff;font-weight:bold">if</span> (flag)
+                {
+                    File.Delete(<span style="color:#fff;font-weight:bold">this</span>.Tempclean + <span style="color:#0ff;font-weight:bold">&#34;holdermail.txt&#34;</span>);
+                }
+                flag = File.Exists(<span style="color:#fff;font-weight:bold">this</span>.Tempclean + <span style="color:#0ff;font-weight:bold">&#34;holderwb.txt&#34;</span>);
+                <span style="color:#fff;font-weight:bold">if</span> (flag)
+                {
+                    File.Delete(<span style="color:#fff;font-weight:bold">this</span>.Tempclean + <span style="color:#0ff;font-weight:bold">&#34;holderwb.txt&#34;</span>);
+                }
+            }
+            <span style="color:#fff;font-weight:bold">catch</span> (Exception expr_2CD)
+            {
+                ProjectData.SetProjectError(expr_2CD);
+                ProjectData.ClearProjectError();
+            }
+        }
+</code></pre></div><p>Other interesting file was <code>License.dll</code>. I loaded it in <code>ILSpy</code> and got the following message:</p>
+<p><img src="/hawkeye/license.png" alt=""></p>
+<p>So it seems <code>SmartAssembly 6.9.0.114 obfuscator</code> was used, at least in some <code>PE</code> files that are part of the whole package. However, even after cleaning it I couldn&rsquo;t make much sense of the code&hellip; The amount of goto&rsquo;s indicates that the file is still obfuscated, so or either <code>SmartAssembly</code> was incorrectly detected or the deobfuscator didn&rsquo;t work. I didn&rsquo;t spend much time with this though.</p>
+<p><img src="/hawkeye/license.clean.png" alt=""></p>
+<p>One of the dumped <code>HawkEye Keylogger - Reborn.exe</code> files was smaller than the original, however after loading it in <code>ILSpy</code> I could see it was still packed and all his functionality appeared the same. By running it I was again stuck in the <code>Net Seal</code> login prompt.</p>
+<p>It is interesting to notice that if this file was using some evasion techniques it would have exited long before we have finished. So this behaviour led me to conclude that if this <code>HawkEye</code> version was using evasion techniques they were most likely not implemented correctly.</p>
+<h3 id="windbg-to-the-rescue">WinDBG to the rescue</h3>
+<p>In order to debug <code>.net</code> assemblies the best option is <code>WinDBG</code> with <code>SOS</code> and <code>SOSEX</code> together. However there is no <code>IL</code> code steping and it might be a bit hard to get into it. The <code>IL</code> opcodes are a bit scary, at least at first. Besides reversing <code>.net</code> malware is not well documented on the internet.</p>
+<p>Before you start make sure you load Microsoft debugging symbols. Set your symbol path to Microsoft symbol server or just download the symbols locally. I usually have the symbols installed locally for obvious reasons, but it is completely up to you. I&rsquo;m not going to show how to do it since this is widely documented. However this step is not optional.</p>
+<p>The <code>SOS</code> extension is part of the <code>.net</code> framework and the <code>SOSEX</code> extension can be downloaded from <!-- raw HTML omitted -->here<!-- raw HTML omitted -->. You can install it anywhere you want, after firing <code>WinDBG</code> you need to load it the following way:</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp">.load <span style="color:#0ff;font-weight:bold">&#34;F:</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">sosex_32</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">sosex.dll&#34;</span>
+</code></pre></div><p>I&rsquo;ll skip the steps to load and use <code>SOS</code> because you can do everything with <code>SOSEX</code>. However in a initial phase it was quite useful to get a better insight of this <code>.net</code> assembly.</p>
+<p>As I mentioned before, one of the things I noticed when I first looked at the <code>.net</code> assembly in <code>ILSpy</code> was the use of <code>Reflection</code> and <code>LoadModule</code>. This method loads a Byte Array, hopefully deofuscated I thought. So with the help of <code>SOSEX</code> is quite easy to set a breakpoint on any method matching a pattern. So I decided to set a breakpoint on any method matching the pattern <em>Assembly.Load</em>:</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp">!mbm *Assembly.Load*
+</code></pre></div><p>When we run the binary <code>CLR</code> is initialized and <code>WinDBG</code> places breakpoints on all methods matching the pattern above. After the first breakpoint is hit you can see a complete list of breakpoints with:</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp"><span style="color:#ff0;font-weight:bold">0</span>:<span style="color:#ff0;font-weight:bold">000</span>&gt; bl
+ <span style="color:#ff0;font-weight:bold">0</span> e <span style="color:#ff0;font-weight:bold">71f</span><span style="color:#ff0;font-weight:bold">37591</span>     <span style="color:#ff0;font-weight:bold">0001</span> (<span style="color:#ff0;font-weight:bold">0001</span>)  <span style="color:#ff0;font-weight:bold">0</span>:**** mscorlib_ni+<span style="color:#ff0;font-weight:bold">0x327591</span>
+ <span style="color:#ff0;font-weight:bold">1</span> e <span style="color:#ff0;font-weight:bold">71f</span><span style="color:#ff0;font-weight:bold">0</span>cb45     <span style="color:#ff0;font-weight:bold">0001</span> (<span style="color:#ff0;font-weight:bold">0001</span>)  <span style="color:#ff0;font-weight:bold">0</span>:**** mscorlib_ni+<span style="color:#ff0;font-weight:bold">0x2fcb45</span>
+ <span style="color:#ff0;font-weight:bold">3</span> e <span style="color:#ff0;font-weight:bold">72647e69</span>     <span style="color:#ff0;font-weight:bold">0001</span> (<span style="color:#ff0;font-weight:bold">0001</span>)  <span style="color:#ff0;font-weight:bold">0</span>:**** mscorlib_ni+<span style="color:#ff0;font-weight:bold">0xa37e69</span>
+ <span style="color:#ff0;font-weight:bold">4</span> e <span style="color:#ff0;font-weight:bold">72647e95</span>     <span style="color:#ff0;font-weight:bold">0001</span> (<span style="color:#ff0;font-weight:bold">0001</span>)  <span style="color:#ff0;font-weight:bold">0</span>:**** mscorlib_ni+<span style="color:#ff0;font-weight:bold">0xa37e95</span>
+ <span style="color:#ff0;font-weight:bold">5</span> e <span style="color:#ff0;font-weight:bold">71f</span><span style="color:#ff0;font-weight:bold">357</span>d1     <span style="color:#ff0;font-weight:bold">0001</span> (<span style="color:#ff0;font-weight:bold">0001</span>)  <span style="color:#ff0;font-weight:bold">0</span>:**** mscorlib_ni+<span style="color:#ff0;font-weight:bold">0x3257d1</span>
+ <span style="color:#ff0;font-weight:bold">6</span> e <span style="color:#ff0;font-weight:bold">72647f</span><span style="color:#ff0;font-weight:bold">0</span>d     <span style="color:#ff0;font-weight:bold">0001</span> (<span style="color:#ff0;font-weight:bold">0001</span>)  <span style="color:#ff0;font-weight:bold">0</span>:**** mscorlib_ni+<span style="color:#ff0;font-weight:bold">0xa37f0d</span>
+ <span style="color:#ff0;font-weight:bold">7</span> e <span style="color:#ff0;font-weight:bold">71f</span>a6009     <span style="color:#ff0;font-weight:bold">0001</span> (<span style="color:#ff0;font-weight:bold">0001</span>)  <span style="color:#ff0;font-weight:bold">0</span>:**** mscorlib_ni+<span style="color:#ff0;font-weight:bold">0x396009</span>
+ <span style="color:#ff0;font-weight:bold">8</span> e <span style="color:#ff0;font-weight:bold">71f</span><span style="color:#ff0;font-weight:bold">0</span>cb6d     <span style="color:#ff0;font-weight:bold">0001</span> (<span style="color:#ff0;font-weight:bold">0001</span>)  <span style="color:#ff0;font-weight:bold">0</span>:**** mscorlib_ni+<span style="color:#ff0;font-weight:bold">0x2fcb6d</span>
+ <span style="color:#ff0;font-weight:bold">9</span> e <span style="color:#ff0;font-weight:bold">72647f</span><span style="color:#ff0;font-weight:bold">31</span>     <span style="color:#ff0;font-weight:bold">0001</span> (<span style="color:#ff0;font-weight:bold">0001</span>)  <span style="color:#ff0;font-weight:bold">0</span>:**** mscorlib_ni+<span style="color:#ff0;font-weight:bold">0xa37f31</span>
+<span style="color:#ff0;font-weight:bold">10</span> e <span style="color:#ff0;font-weight:bold">72647f</span><span style="color:#ff0;font-weight:bold">70</span>     <span style="color:#ff0;font-weight:bold">0001</span> (<span style="color:#ff0;font-weight:bold">0001</span>)  <span style="color:#ff0;font-weight:bold">0</span>:**** mscorlib_ni+<span style="color:#ff0;font-weight:bold">0xa37f70</span>
+<span style="color:#ff0;font-weight:bold">11</span> e <span style="color:#ff0;font-weight:bold">72647f</span>ac     <span style="color:#ff0;font-weight:bold">0001</span> (<span style="color:#ff0;font-weight:bold">0001</span>)  <span style="color:#ff0;font-weight:bold">0</span>:**** mscorlib_ni+<span style="color:#ff0;font-weight:bold">0xa37fac</span>
+<span style="color:#ff0;font-weight:bold">12</span> e <span style="color:#ff0;font-weight:bold">7264800f</span>     <span style="color:#ff0;font-weight:bold">0001</span> (<span style="color:#ff0;font-weight:bold">0001</span>)  <span style="color:#ff0;font-weight:bold">0</span>:**** mscorlib_ni+<span style="color:#ff0;font-weight:bold">0xa3800f</span>
+<span style="color:#ff0;font-weight:bold">13</span> e <span style="color:#ff0;font-weight:bold">72648047</span>     <span style="color:#ff0;font-weight:bold">0001</span> (<span style="color:#ff0;font-weight:bold">0001</span>)  <span style="color:#ff0;font-weight:bold">0</span>:**** mscorlib_ni+<span style="color:#ff0;font-weight:bold">0xa38047</span>
+<span style="color:#ff0;font-weight:bold">14</span> e <span style="color:#ff0;font-weight:bold">726480</span>a5     <span style="color:#ff0;font-weight:bold">0001</span> (<span style="color:#ff0;font-weight:bold">0001</span>)  <span style="color:#ff0;font-weight:bold">0</span>:**** mscorlib_ni+<span style="color:#ff0;font-weight:bold">0xa380a5</span>
+<span style="color:#ff0;font-weight:bold">15</span> e <span style="color:#ff0;font-weight:bold">72648122</span>     <span style="color:#ff0;font-weight:bold">0001</span> (<span style="color:#ff0;font-weight:bold">0001</span>)  <span style="color:#ff0;font-weight:bold">0</span>:**** mscorlib_ni+<span style="color:#ff0;font-weight:bold">0xa38122</span>
+<span style="color:#ff0;font-weight:bold">16</span> e <span style="color:#ff0;font-weight:bold">72648175</span>     <span style="color:#ff0;font-weight:bold">0001</span> (<span style="color:#ff0;font-weight:bold">0001</span>)  <span style="color:#ff0;font-weight:bold">0</span>:**** mscorlib_ni+<span style="color:#ff0;font-weight:bold">0xa38175</span>
+<span style="color:#ff0;font-weight:bold">17</span> e <span style="color:#ff0;font-weight:bold">726485</span>a9     <span style="color:#ff0;font-weight:bold">0001</span> (<span style="color:#ff0;font-weight:bold">0001</span>)  <span style="color:#ff0;font-weight:bold">0</span>:**** mscorlib_ni+<span style="color:#ff0;font-weight:bold">0xa385a9</span>
+<span style="color:#ff0;font-weight:bold">18</span> e <span style="color:#ff0;font-weight:bold">726485</span>c1     <span style="color:#ff0;font-weight:bold">0001</span> (<span style="color:#ff0;font-weight:bold">0001</span>)  <span style="color:#ff0;font-weight:bold">0</span>:**** mscorlib_ni+<span style="color:#ff0;font-weight:bold">0xa385c1</span>
+<span style="color:#ff0;font-weight:bold">19</span> e <span style="color:#ff0;font-weight:bold">72648</span>b1c     <span style="color:#ff0;font-weight:bold">0001</span> (<span style="color:#ff0;font-weight:bold">0001</span>)  <span style="color:#ff0;font-weight:bold">0</span>:**** mscorlib_ni+<span style="color:#ff0;font-weight:bold">0xa38b1c</span>
+<span style="color:#ff0;font-weight:bold">20</span> e <span style="color:#ff0;font-weight:bold">72648</span>bda     <span style="color:#ff0;font-weight:bold">0001</span> (<span style="color:#ff0;font-weight:bold">0001</span>)  <span style="color:#ff0;font-weight:bold">0</span>:**** mscorlib_ni+<span style="color:#ff0;font-weight:bold">0xa38bda</span>
+<span style="color:#ff0;font-weight:bold">21</span> e <span style="color:#ff0;font-weight:bold">71f5f</span><span style="color:#ff0;font-weight:bold">9</span>c7     <span style="color:#ff0;font-weight:bold">0001</span> (<span style="color:#ff0;font-weight:bold">0001</span>)  <span style="color:#ff0;font-weight:bold">0</span>:**** mscorlib_ni+<span style="color:#ff0;font-weight:bold">0x34f9c7</span>
+<span style="color:#ff0;font-weight:bold">23</span> e <span style="color:#ff0;font-weight:bold">72648</span>de1     <span style="color:#ff0;font-weight:bold">0001</span> (<span style="color:#ff0;font-weight:bold">0001</span>)  <span style="color:#ff0;font-weight:bold">0</span>:**** mscorlib_ni+<span style="color:#ff0;font-weight:bold">0xa38de1</span>
+</code></pre></div><p>After some hits and some exceptions we land exactly where we want.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp"><span style="color:#ff0;font-weight:bold">0</span>:<span style="color:#ff0;font-weight:bold">000</span>&gt; g
+ModLoad: <span style="color:#ff0;font-weight:bold">70</span>ec0000 <span style="color:#ff0;font-weight:bold">70</span>ed3000   C:<span style="color:#f00">\</span>Windows<span style="color:#f00">\</span>Microsoft.NET<span style="color:#f00">\</span>Framework<span style="color:#f00">\</span>v4<span style="color:#ff0;font-weight:bold">.0.30319</span><span style="color:#f00">\</span>nlssorting.dll
+Breakpoint <span style="color:#ff0;font-weight:bold">11</span> hit
+eax=<span style="color:#ff0;font-weight:bold">00000000</span> ebx=<span style="color:#ff0;font-weight:bold">021</span>d447c ecx=<span style="color:#ff0;font-weight:bold">0f</span>bc1030 edx=<span style="color:#ff0;font-weight:bold">003e0400</span> esi=<span style="color:#ff0;font-weight:bold">0f</span>bc1030 edi=<span style="color:#ff0;font-weight:bold">021</span>c3f8c
+eip=<span style="color:#ff0;font-weight:bold">72647f</span>ac esp=<span style="color:#ff0;font-weight:bold">0034</span>ee2c ebp=<span style="color:#ff0;font-weight:bold">0034</span>ee34 iopl=<span style="color:#ff0;font-weight:bold">0</span>         nv up ei pl zr na pe nc
+cs=<span style="color:#ff0;font-weight:bold">0023</span>  ss=<span style="color:#ff0;font-weight:bold">002</span>b  ds=<span style="color:#ff0;font-weight:bold">002</span>b  es=<span style="color:#ff0;font-weight:bold">002</span>b  fs=<span style="color:#ff0;font-weight:bold">0053</span>  gs=<span style="color:#ff0;font-weight:bold">002</span>b             efl=<span style="color:#ff0;font-weight:bold">00000246</span>
+mscorlib_ni+<span style="color:#ff0;font-weight:bold">0xa37fac</span>:
+<span style="color:#ff0;font-weight:bold">72647f</span>ac e883c5fdff      call    mscorlib_ni+<span style="color:#ff0;font-weight:bold">0xa14534</span> (<span style="color:#ff0;font-weight:bold">72624534</span>)
+<span style="color:#ff0;font-weight:bold">0</span>:<span style="color:#ff0;font-weight:bold">000</span>&gt; dd ecx
+<span style="color:#ff0;font-weight:bold">0f</span>bc1030  <span style="color:#ff0;font-weight:bold">72052518</span> <span style="color:#ff0;font-weight:bold">003e0400</span> <span style="color:#ff0;font-weight:bold">00</span><span style="color:#ff0;font-weight:bold">905</span>a4d <span style="color:#ff0;font-weight:bold">00000003</span>
+<span style="color:#ff0;font-weight:bold">0f</span>bc1040  <span style="color:#ff0;font-weight:bold">00000004</span> <span style="color:#ff0;font-weight:bold">0000ff</span>ff <span style="color:#ff0;font-weight:bold">000000</span>b8 <span style="color:#ff0;font-weight:bold">00000000</span>
+<span style="color:#ff0;font-weight:bold">0f</span>bc1050  <span style="color:#ff0;font-weight:bold">00000040</span> <span style="color:#ff0;font-weight:bold">00000000</span> <span style="color:#ff0;font-weight:bold">00000000</span> <span style="color:#ff0;font-weight:bold">00000000</span>
+<span style="color:#ff0;font-weight:bold">0f</span>bc1060  <span style="color:#ff0;font-weight:bold">00000000</span> <span style="color:#ff0;font-weight:bold">00000000</span> <span style="color:#ff0;font-weight:bold">00000000</span> <span style="color:#ff0;font-weight:bold">00000000</span>
+<span style="color:#ff0;font-weight:bold">0f</span>bc1070  <span style="color:#ff0;font-weight:bold">00000000</span> <span style="color:#ff0;font-weight:bold">000000</span><span style="color:#ff0;font-weight:bold">80</span> <span style="color:#ff0;font-weight:bold">0</span>eba1f0e cd09b400
+<span style="color:#ff0;font-weight:bold">0f</span>bc1080  <span style="color:#ff0;font-weight:bold">4</span>c01b821 <span style="color:#ff0;font-weight:bold">685421</span>cd <span style="color:#ff0;font-weight:bold">70207369</span> <span style="color:#ff0;font-weight:bold">72676f</span><span style="color:#ff0;font-weight:bold">72</span>
+<span style="color:#ff0;font-weight:bold">0f</span>bc1090  <span style="color:#ff0;font-weight:bold">63206</span>d61 <span style="color:#ff0;font-weight:bold">6f6e6</span>e61 <span style="color:#ff0;font-weight:bold">65622074</span> <span style="color:#ff0;font-weight:bold">6e757220</span>
+<span style="color:#ff0;font-weight:bold">0f</span>bc10a0  <span style="color:#ff0;font-weight:bold">206e6920</span> <span style="color:#ff0;font-weight:bold">20534f</span><span style="color:#ff0;font-weight:bold">44</span> <span style="color:#ff0;font-weight:bold">65646f</span><span style="color:#ff0;font-weight:bold">6</span>d <span style="color:#ff0;font-weight:bold">0</span>a0d0d2e
+</code></pre></div><p>If we check the <code>ECX</code> register we should have our Byte Array ready to be dumped. The second <code>DWORD</code> (003e0400) corresponds to size of the Byte Array and the third <code>DWORD</code> (00905a4d) corresponds to the <code>.net</code> assembly. To dump this assembly we can use the &lsquo;writemem&rsquo; command as follows:</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp">.writemem F:<span style="color:#f00">\</span>sample.decrypted.exe <span style="color:#ff0;font-weight:bold">00</span><span style="color:#ff0;font-weight:bold">905</span>a4d L? <span style="color:#ff0;font-weight:bold">003e0400</span>
+</code></pre></div><p>But there&rsquo;s an easier and 1337 way by using the <code>poi()</code> function. Pointer of integer function is used to get pointer-sized data. Think about the <code>*</code> operator for <code>C</code> and <code>C++</code>. By using <code>poi()</code> we just provide <code>ECX+4</code> as its parameter and it will automatically take the value at that address and use it, rather than just using the value of <code>ECX+4</code>:</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp">.writemem F:<span style="color:#f00">\</span>sample.decrypted.exe <span style="color:#f00">@</span>ecx+<span style="color:#ff0;font-weight:bold">8</span> L?poi(<span style="color:#f00">@</span>ecx+<span style="color:#ff0;font-weight:bold">4</span>) 
+</code></pre></div><p>I loaded the assembly in <code>ILSpy</code> and <strong>Bingo</strong>.</p>
+<p><img src="/hawkeye/bingo.png" alt=""></p>
+<p>I now have access to the whole code. Under <code>Keylogger</code> we can find the code for the <code>Builder</code> of the samples that have been collected on the wild. As we can see, by looking only at the methods, the <code>Builder</code> has loads of &lsquo;cool&rsquo; stuff. &lsquo;NewsFeed&rsquo;, &lsquo;Tutorial&rsquo;, &lsquo;BugReport&rsquo;, &lsquo;Bazaar&rsquo;&hellip; it almost looks like a legit software.</p>
+<p>After running the new binary I&rsquo;m still stuck at the <code>Net Seal</code> prompt login though. But now I have access to the code!</p>
+<p>In case you missed something here&rsquo;s the full <code>WinDBG</code> session.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-fallback" data-lang="fallback">CommandLine: &#34;C:\Users\rui\Desktop\HawkEyeKeyloggerReborn\HawkEye Keylogger - Reborn\HawkEye Keylogger - Reborn.exe&#34;
+
+************* Symbol Path validation summary **************
+Response                         Time (ms)     Location
+Deferred                                       srv*
+
+************* Symbol Path validation summary **************
+Response                         Time (ms)     Location
+Deferred                                       SRV*F:\symbols*http://msdl.microsoft.com/download/symbols
+Symbol search path is: SRV*F:\symbols*http://msdl.microsoft.com/download/symbols
+Executable search path is: srv*
+ModLoad: 00a40000 00b72000   image00a40000
+ModLoad: 77240000 773c0000   ntdll.dll
+ModLoad: 735b0000 735fa000   C:\Windows\SysWOW64\MSCOREE.DLL
+ModLoad: 75240000 75350000   C:\Windows\syswow64\KERNEL32.dll
+ModLoad: 76d20000 76d67000   C:\Windows\syswow64\KERNELBASE.dll
+(9a8.c94): Break instruction exception - code 80000003 (first chance)
+eax=00000000 ebx=00000000 ecx=08960000 edx=0017dda8 esi=fffffffe edi=00000000
+eip=772e103b esp=0034f8c8 ebp=0034f8f4 iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000246
+ntdll!LdrpDoDebuggerBreak+0x2c:
+772e103b cc              int     3
+0:000&gt; .load &#34;F:\\sosex_32\\sosex.dll&#34;
+0:000&gt; !mbm *Assembly.Load*
+The CLR has not yet been initialized in the process.
+Breakpoint resolution will be attempted when the CLR is initialized.
+0:000&gt; g
+ModLoad: 76b70000 76c10000   C:\Windows\syswow64\ADVAPI32.dll
+ModLoad: 764d0000 7657c000   C:\Windows\syswow64\msvcrt.dll
+ModLoad: 767f0000 76809000   C:\Windows\SysWOW64\sechost.dll
+ModLoad: 76820000 76910000   C:\Windows\syswow64\RPCRT4.dll
+ModLoad: 74bd0000 74c30000   C:\Windows\syswow64\SspiCli.dll
+ModLoad: 74bc0000 74bcc000   C:\Windows\syswow64\CRYPTBASE.dll
+ModLoad: 73530000 735a9000   C:\Windows\Microsoft.NET\Framework\v4.0.30319\mscoreei.dll
+ModLoad: 761e0000 76237000   C:\Windows\syswow64\SHLWAPI.dll
+ModLoad: 76ad0000 76b60000   C:\Windows\syswow64\GDI32.dll
+ModLoad: 76940000 76a40000   C:\Windows\syswow64\USER32.dll
+ModLoad: 767d0000 767da000   C:\Windows\syswow64\LPK.dll
+ModLoad: 76580000 7661d000   C:\Windows\syswow64\USP10.dll
+ModLoad: 76a70000 76ad0000   C:\Windows\SysWOW64\IMM32.DLL
+ModLoad: 76d70000 76e3c000   C:\Windows\syswow64\MSCTF.dll
+ModLoad: 73520000 73529000   C:\Windows\SysWOW64\VERSION.dll
+ModLoad: 72e60000 73511000   C:\Windows\Microsoft.NET\Framework\v4.0.30319\clr.dll
+ModLoad: 72d60000 72e55000   C:\Windows\SysWOW64\MSVCR120_CLR0400.dll
+(9a8.c94): Unknown exception - code 04242420 (first chance)
+ModLoad: 71c10000 72d5a000   C:\Windows\assembly\NativeImages_v4.0.30319_32\mscorlib\225759bb87c854c0fff27b1d84858c21\mscorlib.ni.dll
+Breakpoint set at System.Reflection.Assembly.LoadFrom(System.String) in AppDomain 00368190.
+Breakpoint set at System.Reflection.Assembly.LoadFrom(System.String, System.Security.Policy.Evidence) in AppDomain 00368190.
+Breakpoint set at System.Reflection.Assembly.LoadFrom(System.String, System.Security.Policy.Evidence, Byte[], System.Configuration.Assemblies.AssemblyHashAlgorithm) in AppDomain 00368190.
+Breakpoint set at System.Reflection.Assembly.LoadFrom(System.String, Byte[], System.Configuration.Assemblies.AssemblyHashAlgorithm) in AppDomain 00368190.
+Breakpoint set at System.Reflection.Assembly.Load(System.String) in AppDomain 00368190.
+Breakpoint set at System.Reflection.Assembly.Load(System.String, System.Security.Policy.Evidence) in AppDomain 00368190.
+Breakpoint set at System.Reflection.Assembly.Load(System.Reflection.AssemblyName) in AppDomain 00368190.
+Breakpoint set at System.Reflection.Assembly.Load(System.Reflection.AssemblyName, System.Security.Policy.Evidence) in AppDomain 00368190.
+Breakpoint set at System.Reflection.Assembly.LoadWithPartialName(System.String) in AppDomain 00368190.
+Breakpoint set at System.Reflection.Assembly.LoadWithPartialName(System.String, System.Security.Policy.Evidence) in AppDomain 00368190.
+Breakpoint set at System.Reflection.Assembly.Load(Byte[]) in AppDomain 00368190.
+Breakpoint set at System.Reflection.Assembly.Load(Byte[], Byte[]) in AppDomain 00368190.
+Breakpoint set at System.Reflection.Assembly.Load(Byte[], Byte[], System.Security.SecurityContextSource) in AppDomain 00368190.
+Breakpoint set at System.Reflection.Assembly.Load(Byte[], Byte[], System.Security.Policy.Evidence) in AppDomain 00368190.
+Breakpoint set at System.Reflection.Assembly.LoadFile(System.String) in AppDomain 00368190.
+Breakpoint set at System.Reflection.Assembly.LoadFile(System.String, System.Security.Policy.Evidence) in AppDomain 00368190.
+Breakpoint set at System.Reflection.Assembly.LoadModule(System.String, Byte[]) in AppDomain 00368190.
+Breakpoint set at System.Reflection.Assembly.LoadModule(System.String, Byte[], Byte[]) in AppDomain 00368190.
+Breakpoint set at System.Reflection.RuntimeAssembly.LoadWithPartialNameHack(System.String, Boolean) in AppDomain 00368190.
+Breakpoint set at System.Reflection.RuntimeAssembly.LoadWithPartialNameInternal(System.String, System.Security.Policy.Evidence, System.Threading.StackCrawlMark ByRef) in AppDomain 00368190.
+Breakpoint set at System.Reflection.RuntimeAssembly.LoadWithPartialNameInternal(System.Reflection.AssemblyName, System.Security.Policy.Evidence, System.Threading.StackCrawlMark ByRef) in AppDomain 00368190.
+Breakpoint set at System.Reflection.RuntimeAssembly.LoadModule(System.String, Byte[], Byte[]) in AppDomain 00368190.
+ModLoad: 74f60000 750bc000   C:\Windows\syswow64\ole32.dll
+ModLoad: 70490000 70510000   C:\Windows\SysWOW64\uxtheme.dll
+ModLoad: 71b30000 71bae000   C:\Windows\Microsoft.NET\Framework\v4.0.30319\clrjit.dll
+ModLoad: 76010000 7609f000   C:\Windows\syswow64\OLEAUT32.dll
+*** WARNING: Unable to verify checksum for C:\Windows\assembly\NativeImages_v4.0.30319_32\mscorlib\225759bb87c854c0fff27b1d84858c21\mscorlib.ni.dll
+Breakpoint 23 hit
+eax=ffffff00 ebx=00000000 ecx=00368190 edx=0034f280 esi=021a3084 edi=021a23d0
+eip=72648de1 esp=0034f27c ebp=0034f290 iopl=0         nv up ei ng nz ac pe cy
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000297
+mscorlib_ni+0xa38de1:
+72648de1 33d2            xor     edx,edx
+0:000&gt; bl
+ 0 e 71f37591     0001 (0001)  0:**** mscorlib_ni+0x327591
+ 1 e 71f0cb45     0001 (0001)  0:**** mscorlib_ni+0x2fcb45
+ 3 e 72647e69     0001 (0001)  0:**** mscorlib_ni+0xa37e69
+ 4 e 72647e95     0001 (0001)  0:**** mscorlib_ni+0xa37e95
+ 5 e 71f357d1     0001 (0001)  0:**** mscorlib_ni+0x3257d1
+ 6 e 72647f0d     0001 (0001)  0:**** mscorlib_ni+0xa37f0d
+ 7 e 71fa6009     0001 (0001)  0:**** mscorlib_ni+0x396009
+ 8 e 71f0cb6d     0001 (0001)  0:**** mscorlib_ni+0x2fcb6d
+ 9 e 72647f31     0001 (0001)  0:**** mscorlib_ni+0xa37f31
+10 e 72647f70     0001 (0001)  0:**** mscorlib_ni+0xa37f70
+11 e 72647fac     0001 (0001)  0:**** mscorlib_ni+0xa37fac
+12 e 7264800f     0001 (0001)  0:**** mscorlib_ni+0xa3800f
+13 e 72648047     0001 (0001)  0:**** mscorlib_ni+0xa38047
+14 e 726480a5     0001 (0001)  0:**** mscorlib_ni+0xa380a5
+15 e 72648122     0001 (0001)  0:**** mscorlib_ni+0xa38122
+16 e 72648175     0001 (0001)  0:**** mscorlib_ni+0xa38175
+17 e 726485a9     0001 (0001)  0:**** mscorlib_ni+0xa385a9
+18 e 726485c1     0001 (0001)  0:**** mscorlib_ni+0xa385c1
+19 e 72648b1c     0001 (0001)  0:**** mscorlib_ni+0xa38b1c
+20 e 72648bda     0001 (0001)  0:**** mscorlib_ni+0xa38bda
+21 e 71f5f9c7     0001 (0001)  0:**** mscorlib_ni+0x34f9c7
+23 e 72648de1     0001 (0001)  0:**** mscorlib_ni+0xa38de1
+0:000&gt; dd ecx
+00368190  72e63014 00000001 00368190 001f3f7c
+003681a0  00000010 00000000 00000000 00369150
+003681b0  00000000 00000000 00000000 baadf000
+003681c0  00368fa0 ffffffff 00000000 00000000
+003681d0  00000000 00000000 c0000020 00000001
+003681e0  00000001 00000000 00368e88 ffffffff
+003681f0  00000000 00000000 00000000 00000000
+00368200  c0000000 00368ec0 ffffffff 00000000
+0:000&gt; g
+ModLoad: 711a0000 71b27000   C:\Windows\assembly\NativeImages_v4.0.30319_32\System\52cca48930e580e3189eac47158c20be\System.ni.dll
+(9a8.c94): CLR exception - code e0434352 (first chance)
+Breakpoint 11 hit
+eax=00000000 ebx=0034e5b0 ecx=021b9924 edx=00000025 esi=021b9924 edi=021b1a7c
+eip=72647fac esp=0034e4a4 ebp=0034e4ac iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000246
+mscorlib_ni+0xa37fac:
+72647fac e883c5fdff      call    mscorlib_ni+0xa14534 (72624534)
+0:000&gt; dd ecx
+021b9924  72052518 00000800 00905a4d 00000003
+021b9934  00000004 0000ffff 000000b8 00000000
+021b9944  00000040 00000000 00000000 00000000
+021b9954  00000000 00000000 00000000 00000000
+021b9964  00000000 00000080 0eba1f0e cd09b400
+021b9974  4c01b821 685421cd 70207369 72676f72
+021b9984  63206d61 6f6e6e61 65622074 6e757220
+021b9994  206e6920 20534f44 65646f6d 0a0d0d2e
+0:000&gt; g
+(9a8.c94): CLR exception - code e0434352 (first chance)
+(9a8.c94): Access violation - code c0000005 (first chance)
+First chance exceptions are reported before any exception handling.
+This exception may be expected and handled.
+eax=0000000c ebx=00000000 ecx=121a0000 edx=00000005 esi=15cb899f edi=121a0000
+eip=0045cd2b esp=0034e478 ebp=0034e4c0 iopl=0         nv up ei pl nz na po nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00010202
+0045cd2b 8b0407          mov     eax,dword ptr [edi+eax] ds:002b:121a000c=????????
+0:000&gt; g
+(9a8.c94): Access violation - code c0000005 (first chance)
+First chance exceptions are reported before any exception handling.
+This exception may be expected and handled.
+eax=0000000c ebx=00000000 ecx=0b06799c edx=00000005 esi=15cb899f edi=0b06799c
+eip=0045cd2b esp=0034e478 ebp=0034e4c0 iopl=0         nv up ei pl nz na po nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00010202
+0045cd2b 8b0407          mov     eax,dword ptr [edi+eax] ds:002b:0b0679a8=????????
+0:000&gt; g
+(9a8.c94): Access violation - code c0000005 (first chance)
+First chance exceptions are reported before any exception handling.
+This exception may be expected and handled.
+eax=0000000c ebx=00000000 ecx=00004e20 edx=00000005 esi=15cb899f edi=00004e20
+eip=0045cd2b esp=0034e478 ebp=0034e4c0 iopl=0         nv up ei pl nz na po nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00010202
+0045cd2b 8b0407          mov     eax,dword ptr [edi+eax] ds:002b:00004e2c=????????
+0:000&gt; g
+(9a8.c94): Access violation - code c0000005 (first chance)
+First chance exceptions are reported before any exception handling.
+This exception may be expected and handled.
+eax=0000000c ebx=00000000 ecx=00001000 edx=00000005 esi=15cb899f edi=00001000
+eip=0045cd2b esp=0034e478 ebp=0034e4c0 iopl=0         nv up ei pl nz na po nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00010202
+0045cd2b 8b0407          mov     eax,dword ptr [edi+eax] ds:002b:0000100c=????????
+0:000&gt; g
+(9a8.c94): Access violation - code c0000005 (first chance)
+First chance exceptions are reported before any exception handling.
+This exception may be expected and handled.
+eax=0000000c ebx=00000000 ecx=0000002c edx=00000005 esi=15cb899f edi=0000002c
+eip=0045cd2b esp=0034e478 ebp=0034e4c0 iopl=0         nv up ei pl nz na po nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00010202
+0045cd2b 8b0407          mov     eax,dword ptr [edi+eax] ds:002b:00000038=????????
+0:000&gt; g
+(9a8.c94): Access violation - code c0000005 (first chance)
+First chance exceptions are reported before any exception handling.
+This exception may be expected and handled.
+eax=0000000c ebx=00000000 ecx=00000008 edx=00000005 esi=15cb899f edi=00000008
+eip=0045cd2b esp=0034e478 ebp=0034e4c0 iopl=0         nv up ei pl nz na po nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00010202
+0045cd2b 8b0407          mov     eax,dword ptr [edi+eax] ds:002b:00000014=????????
+0:000&gt; g
+(9a8.c94): Access violation - code c0000005 (first chance)
+First chance exceptions are reported before any exception handling.
+This exception may be expected and handled.
+eax=0000000c ebx=00000000 ecx=00000008 edx=00000005 esi=15cb899f edi=00000008
+eip=0045cd2b esp=0034e478 ebp=0034e4c0 iopl=0         nv up ei pl nz na po nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00010202
+0045cd2b 8b0407          mov     eax,dword ptr [edi+eax] ds:002b:00000014=????????
+0:000&gt; g
+(9a8.c94): Access violation - code c0000005 (first chance)
+First chance exceptions are reported before any exception handling.
+This exception may be expected and handled.
+eax=0000000c ebx=00000000 ecx=0000000c edx=00000005 esi=15cb899f edi=0000000c
+eip=0045cd2b esp=0034e478 ebp=0034e4c0 iopl=0         nv up ei pl nz na po nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00010202
+0045cd2b 8b0407          mov     eax,dword ptr [edi+eax] ds:002b:00000018=????????
+0:000&gt; g
+ModLoad: 70ec0000 70ed3000   C:\Windows\Microsoft.NET\Framework\v4.0.30319\nlssorting.dll
+Breakpoint 11 hit
+eax=00000000 ebx=021d447c ecx=0fbc1030 edx=003e0400 esi=0fbc1030 edi=021c3f8c
+eip=72647fac esp=0034ee2c ebp=0034ee34 iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000246
+mscorlib_ni+0xa37fac:
+72647fac e883c5fdff      call    mscorlib_ni+0xa14534 (72624534)
+0:000&gt; dd ecx
+0fbc1030  72052518 003e0400 00905a4d 00000003
+0fbc1040  00000004 0000ffff 000000b8 00000000
+0fbc1050  00000040 00000000 00000000 00000000
+0fbc1060  00000000 00000000 00000000 00000000
+0fbc1070  00000000 00000080 0eba1f0e cd09b400
+0fbc1080  4c01b821 685421cd 70207369 72676f72
+0fbc1090  63206d61 6f6e6e61 65622074 6e757220
+0fbc10a0  206e6920 20534f44 65646f6d 0a0d0d2e
+0:000&gt; .writemem f:\sample.decrypted.exe @ecx+8 L?poi(@ecx+4)
+Writing 3e0400 bytes............................
+</code></pre></div><h3 id="cracking-hawkeye-keylogger-reborn">Cracking HawkEye Keylogger Reborn</h3>
+<p>So I need to bypass this login prompt which I guess it validates the license. Which options do I have? I can try to export the code and build it on Visual Studio&hellip;</p>
+<p><img src="/hawkeye/visual.studio.png" alt=""></p>
+<p>Well, I tried&hellip; 738 errors! Good luck with that&hellip;</p>
+<p>The only option is to patch the binary. Even though I&rsquo;ll be dealing with <code>IL</code> code and not assembly code&hellip; it looks more fun than fixing 738 build errors. Luckily there&rsquo;s a really nice plugin for <code>ILSpy</code> and <code>Reflector</code> called <!-- raw HTML omitted -->Reflexil<!-- raw HTML omitted --> that allows you to binary patch the <code>IL</code> code &ldquo;easily&rdquo;.</p>
+<p>After poking around the code for a while I&rsquo;ve found an interesting method inside the class &lsquo;License&rsquo; called <code>Initialize()</code>. It seems I&rsquo;ll need to modify it.</p>
+<p><img src="/hawkeye/reflexil.png" alt=""></p>
+<p>There are two ways you can modify the code with Reflexil. An easy one and a hard one. The easy one allows you to modify directly the code in C# (or Visual Basic). The hard one allows you to modify directly the IL opcodes.</p>
+<p>Of course I went for the easy one! But that didn&rsquo;t work quite well&hellip;</p>
+<p><img src="/hawkeye/easy.way.png" alt=""></p>
+<p>It looks I&rsquo;ll have to learn some <code>IL</code> code. I have tried to build some really small PoCs on Visual Studio to figure out the <code>IL</code> opcodes for simple things like:</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp"><span style="color:#fff;font-weight:bold">return</span> <span style="color:#fff;font-weight:bold">true</span>;
+</code></pre></div><p>Which is basically:</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp">ldc.i4<span style="color:#ff0;font-weight:bold">.1</span>
+ret
+</code></pre></div><p>However, <code>Reflexil</code> makes it really easy, after poking around the code for a little while it looked like I only needed to delete instructions and not actually write any <code>IL</code> code.</p>
+<p><img src="/hawkeye/delete.all.png" alt=""></p>
+<p>So I deleted all the <code>IL</code> instructions from the methods <code>Initialize()</code> and <code>Initialize(string)</code> and saved the new file.</p>
+<p><img src="/hawkeye/save.as.png" alt=""></p>
+<p>I&rsquo;ve run it and&hellip; voila. Cracked?</p>
+<p><img src="/hawkeye/cracked.png" alt=""></p>
+<p>Well&hellip; kind of. Because, if you try to use the <code>builder</code>&hellip; it does&rsquo;t work.</p>
+<p><img src="/hawkeye/builder.not.working.png" alt=""></p>
+<p>The newest version of <code>HawkEye Keylogger</code> has one <strong>big</strong> difference to the older ones that makes it a bit harder to crack. While the other cracked versions of <code>HawkEye Keylogger</code> that I could find on-line (I mean the ones that work, because some don&rsquo;t&hellip;) have the actual keylogger embedded as a <code>Resource</code>. However this <code>Reborn</code> version doesn&rsquo;t have the keylogger binary embedded as a Resource any more. Instead, during runtime the keylogger executable is downloaded from &lsquo;<a href="http://seal.nimoru.com/Base/getFile.php'">http://seal.nimoru.com/Base/getFile.php'</a>. The author&rsquo;s intention is clearly avoid cracking. Look at the following <code>builder</code> code under the <code>Menu</code> class.</p>
+<p><img src="/hawkeye/get.stub.png" alt=""></p>
+<p>As we can see the download of the file depends on code from the <code>Net Seal</code> authentication mechanism that we bypassed since we don&rsquo;t have an account. Anyway we can see what&rsquo;s going on here by looking at the <code>Cloud</code> method.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp"><span style="color:#fff;font-weight:bold">public</span> byte[] Cloud(string Url)
+{
+    byte[] result;
+    <span style="color:#fff;font-weight:bold">try</span>
+    {
+        result = <span style="color:#fff;font-weight:bold">this</span>.Decompress(Convert.FromBase64String(Url));
+        <span style="color:#fff;font-weight:bold">return</span> result;
+    }
+    <span style="color:#fff;font-weight:bold">catch</span> (Exception expr_13)
+    {
+        ProjectData.SetProjectError(expr_13);
+        ProjectData.ClearProjectError();
+    }
+    result = <span style="color:#fff;font-weight:bold">new</span> byte[<span style="color:#ff0;font-weight:bold">0</span>];
+    <span style="color:#fff;font-weight:bold">return</span> result;
+}
+</code></pre></div><p>I started looking around the code again to see what I could do. I though the easiest way was using a local sample of the keylogger and read its bytes directly into <code>MyProject.Forms.Keylogger.stubBytes</code>. To do this I need to find a proper place and write some <code>IL</code> code. It seems I can&rsquo;t go away without writing <code>IL</code> code. Fun.</p>
+<p>I used the same approach as before, launched Visual Studio and wrote more or less what I needed:</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp"><span style="color:#fff;font-weight:bold">using</span> System;
+<span style="color:#fff;font-weight:bold">using</span> System.IO;
+
+<span style="color:#fff;font-weight:bold">namespace</span> StubTest
+{
+    <span style="color:#fff;font-weight:bold">class</span> Program
+    {
+        <span style="color:#fff;font-weight:bold">static</span> <span style="color:#fff;font-weight:bold">void</span> Main(string[] args)
+        {
+            string path = <span style="color:#f00">@</span><span style="color:#0ff;font-weight:bold">&#34;f:\stub.exe&#34;</span>;
+            byte[] byteArray = File.ReadAllBytes(path);
+        }
+    }
+}
+</code></pre></div><p>Then I loaded it on <code>ILSpy</code> and looked at the <code>IL</code> instructions.</p>
+<p><img src="/hawkeye/stub.test.png" alt=""></p>
+<p>Then I started looking at the <code>IL</code> instructions of <code>GetStub</code> method from the <code>Menu</code> class&hellip;</p>
+<p><img src="/hawkeye/get.stub.il.png" alt=""></p>
+<p>I&rsquo;ve found what it looked like a possible place for my <code>IL</code> code at <code>Menu_Load</code> method on the <code>Menu</code> class and rewrote it as shown bellow:</p>
+<p><img src="/hawkeye/il.code.final.png" alt=""></p>
+<p>Saved the new file and gave it a try&hellip;</p>
+<p><img src="/hawkeye/builder.works.png" alt=""></p>
+<p>Yes, now it works. You need to place the <code>keylogger</code> sample on <code>C:\pwned.exe</code>, you can change it but I&rsquo;ll leave that as an exercise for you. Note that you also need <code>Mono.Cecil.dll</code> installed on your system or simply on the same directory as our final cracked version or the program will crash with an <code>System.IO.FileNotFoundException</code>. If you use <code>Procmon</code> you can easily identify what&rsquo;s missing&hellip;</p>
+<p><img src="/hawkeye/mono.cecil.dll.png" alt=""></p>
+<p>You already have <code>Mono.Cecil.dll</code>, look at the dumps from <code>MegaDumper</code> so&hellip; Mission Accomplished!</p>
+<p>I&rsquo;m not sharing the cracked version. However, you can visit the links I mention above and with all the information here you should be able to get the &lsquo;job done&rsquo; or even do a better job.</p>
+<h3 id="hawkeye-builder-features-and-code">HawkEye Builder Features and Code</h3>
+<p>The builder presents the user with multiple options. We can contact support via email as shown bellow.</p>
+<p><img src="/hawkeye/support.png" alt=""></p>
+<p>Here&rsquo;s the code from sending an email and &ldquo;ask a favour&rdquo;!</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp"><span style="color:#fff;font-weight:bold">private</span> <span style="color:#fff;font-weight:bold">void</span> AskFavour()
+        {
+            <span style="color:#fff;font-weight:bold">this</span>.Invoke(<span style="color:#fff;font-weight:bold">new</span> VB<span style="color:#f00">$</span>AnonymousDelegate_0(delegate
+            {
+                <span style="color:#fff;font-weight:bold">try</span>
+                {
+                    <span style="color:#fff;font-weight:bold">this</span>.btnSend.Enabled = <span style="color:#fff;font-weight:bold">false</span>;
+                    <span style="color:#fff;font-weight:bold">this</span>.btnSend.Text = <span style="color:#0ff;font-weight:bold">&#34;Wait...&#34;</span>;
+                    <span style="color:#fff;font-weight:bold">this</span>.sBarLabel.Text = <span style="color:#0ff;font-weight:bold">&#34;We are submitting your report, please wait...&#34;</span>;
+                    <span style="color:#fff;font-weight:bold">this</span>.communication = LicenseGlobal.Seal.GetVariable(<span style="color:#0ff;font-weight:bold">&#34;communication&#34;</span>).Split(<span style="color:#fff;font-weight:bold">new</span> <span style="color:#fff;font-weight:bold">char</span>[]
+                    {
+                        <span style="color:#0ff;font-weight:bold">&#39;|&#39;</span>
+                    });
+                    MailMessage mailMessage = <span style="color:#fff;font-weight:bold">new</span> MailMessage();
+                    mailMessage.From = <span style="color:#fff;font-weight:bold">new</span> MailAddress(<span style="color:#fff;font-weight:bold">this</span>.communication[<span style="color:#ff0;font-weight:bold">0</span>]);
+                    <span style="color:#fff;font-weight:bold">bool</span> flag = Operators.CompareString(<span style="color:#fff;font-weight:bold">this</span>.cboSubject.Text, <span style="color:#0ff;font-weight:bold">&#34;Technical Support&#34;</span>, <span style="color:#fff;font-weight:bold">false</span>) == <span style="color:#ff0;font-weight:bold">0</span>;
+                    <span style="color:#fff;font-weight:bold">if</span> (flag)
+                    {
+                        string addresses = string.Concat(<span style="color:#fff;font-weight:bold">new</span> string[]
+                        {
+                            <span style="color:#fff;font-weight:bold">this</span>.communication[<span style="color:#ff0;font-weight:bold">0</span>],
+                            <span style="color:#0ff;font-weight:bold">&#34;,&#34;</span>,
+                            <span style="color:#fff;font-weight:bold">this</span>.communication[<span style="color:#ff0;font-weight:bold">4</span>],
+                            <span style="color:#0ff;font-weight:bold">&#34;,&#34;</span>,
+                            <span style="color:#fff;font-weight:bold">this</span>.communication[<span style="color:#ff0;font-weight:bold">5</span>],
+                            <span style="color:#0ff;font-weight:bold">&#34;,&#34;</span>,
+                            <span style="color:#fff;font-weight:bold">this</span>.txtEmail.Text
+                        });
+                        mailMessage.To.Add(addresses);
+                    }
+                    <span style="color:#fff;font-weight:bold">else</span>
+                    {
+                        flag = (Operators.CompareString(<span style="color:#fff;font-weight:bold">this</span>.cboSubject.Text, <span style="color:#0ff;font-weight:bold">&#34;Sales Support&#34;</span>, <span style="color:#fff;font-weight:bold">false</span>) == <span style="color:#ff0;font-weight:bold">0</span>);
+                        <span style="color:#fff;font-weight:bold">if</span> (flag)
+                        {
+                            string addresses2 = <span style="color:#fff;font-weight:bold">this</span>.communication[<span style="color:#ff0;font-weight:bold">2</span>] + <span style="color:#0ff;font-weight:bold">&#34;,&#34;</span> + <span style="color:#fff;font-weight:bold">this</span>.txtEmail.Text;
+                            mailMessage.To.Add(addresses2);
+                        }
+                        <span style="color:#fff;font-weight:bold">else</span>
+                        {
+                            flag = (Operators.CompareString(<span style="color:#fff;font-weight:bold">this</span>.cboSubject.Text, <span style="color:#0ff;font-weight:bold">&#34;Others&#34;</span>, <span style="color:#fff;font-weight:bold">false</span>) == <span style="color:#ff0;font-weight:bold">0</span>);
+                            <span style="color:#fff;font-weight:bold">if</span> (flag)
+                            {
+                                string addresses3 = <span style="color:#fff;font-weight:bold">this</span>.communication[<span style="color:#ff0;font-weight:bold">1</span>] + <span style="color:#0ff;font-weight:bold">&#34;,&#34;</span> + <span style="color:#fff;font-weight:bold">this</span>.txtEmail.Text;
+                                mailMessage.To.Add(addresses3);
+                            }
+                        }
+                    }
+                    mailMessage.Subject = <span style="color:#fff;font-weight:bold">this</span>.cboSubject.Text;
+                    mailMessage.Subject = <span style="color:#fff;font-weight:bold">this</span>.cboSubject.Text;
+                    mailMessage.Body = string.Concat(<span style="color:#fff;font-weight:bold">new</span> string[]
+                    {
+                        <span style="color:#0ff;font-weight:bold">&#34;Username: &#34;</span>,
+                        LicenseGlobal.Seal.Username.ToString(),
+                        <span style="color:#0ff;font-weight:bold">&#34;</span><span style="color:#0ff;font-weight:bold">\r\n</span><span style="color:#0ff;font-weight:bold">Product: HawkEye Keylogger - Reborn</span><span style="color:#0ff;font-weight:bold">\r\n</span><span style="color:#0ff;font-weight:bold">License Type: &#34;</span>,
+                        LicenseGlobal.Seal.LicenseType.ToString(),
+                        <span style="color:#0ff;font-weight:bold">&#34;</span><span style="color:#0ff;font-weight:bold">\r\n</span><span style="color:#0ff;font-weight:bold">Customer&#39;s Email: &#34;</span>,
+                        <span style="color:#fff;font-weight:bold">this</span>.txtEmail.Text,
+                        <span style="color:#0ff;font-weight:bold">&#34;</span><span style="color:#0ff;font-weight:bold">\r\n\r\n\r\n\r\n</span><span style="color:#0ff;font-weight:bold">Subject: </span><span style="color:#0ff;font-weight:bold">\r\n</span><span style="color:#0ff;font-weight:bold">&#34;</span>,
+                        <span style="color:#fff;font-weight:bold">this</span>.cboSubject.Text,
+                        <span style="color:#0ff;font-weight:bold">&#34;</span><span style="color:#0ff;font-weight:bold">\r\n\r\n</span><span style="color:#0ff;font-weight:bold">Body: </span><span style="color:#0ff;font-weight:bold">\r\n</span><span style="color:#0ff;font-weight:bold">&#34;</span>,
+                        <span style="color:#fff;font-weight:bold">this</span>.txtBody.Text
+                    });
+                    <span style="color:#fff;font-weight:bold">new</span> SmtpClient(<span style="color:#0ff;font-weight:bold">&#34;mail.hawkspy.net&#34;</span>)
+                    {
+                        Port = <span style="color:#ff0;font-weight:bold">25</span>,
+                        DeliveryMethod = SmtpDeliveryMethod.Network,
+                        UseDefaultCredentials = <span style="color:#fff;font-weight:bold">false</span>,
+                        Credentials = <span style="color:#fff;font-weight:bold">new</span> NetworkCredential(<span style="color:#fff;font-weight:bold">this</span>.communication[<span style="color:#ff0;font-weight:bold">0</span>], <span style="color:#fff;font-weight:bold">this</span>.communication[<span style="color:#ff0;font-weight:bold">6</span>] + <span style="color:#0ff;font-weight:bold">&#34;</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">${&#34;</span>),
+                        EnableSsl = <span style="color:#fff;font-weight:bold">false</span>
+                    }.Send(mailMessage);
+                    CustomMsgBox.Show(<span style="color:#0ff;font-weight:bold">&#34;Success! One of our Team Member will contact you shortly.&#34;</span>);
+                    <span style="color:#fff;font-weight:bold">this</span>.btnSend.Enabled = <span style="color:#fff;font-weight:bold">true</span>;
+                    <span style="color:#fff;font-weight:bold">this</span>.btnSend.Text = <span style="color:#0ff;font-weight:bold">&#34;Send&#34;</span>;
+                    <span style="color:#fff;font-weight:bold">this</span>.sBarLabel.Text = <span style="color:#0ff;font-weight:bold">&#34;Idle...&#34;</span>;
+                }
+                <span style="color:#fff;font-weight:bold">catch</span> (Exception expr_305)
+                {
+                    ProjectData.SetProjectError(expr_305);
+                    Exception ex = expr_305;
+                    CustomMsgBox.Show(ex.Message.ToString());
+                    <span style="color:#fff;font-weight:bold">this</span>.btnSend.Enabled = <span style="color:#fff;font-weight:bold">true</span>;
+                    <span style="color:#fff;font-weight:bold">this</span>.btnSend.Text = <span style="color:#0ff;font-weight:bold">&#34;Send&#34;</span>;
+                    <span style="color:#fff;font-weight:bold">this</span>.sBarLabel.Text = <span style="color:#0ff;font-weight:bold">&#34;Idle...&#34;</span>;
+                    ProjectData.ClearProjectError();
+                }
+            }
+</code></pre></div><p>You can check the status of your subscription too.</p>
+<p><img src="/hawkeye/subscription.png" alt=""></p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp">        <span style="color:#fff;font-weight:bold">public</span> <span style="color:#fff;font-weight:bold">void</span> Account()
+        {
+            <span style="color:#fff;font-weight:bold">this</span>.txtBoxGlobalMessage.Text = LicenseGlobal.Seal.GlobalMessage;
+            <span style="color:#fff;font-weight:bold">this</span>.Username.Text = <span style="color:#0ff;font-weight:bold">&#34;Username: &#34;</span> + LicenseGlobal.Seal.Username;
+            <span style="color:#fff;font-weight:bold">this</span>.Label1.Text = <span style="color:#0ff;font-weight:bold">&#34;Update Available: &#34;</span> + LicenseGlobal.Seal.UpdateAvailable.ToString();
+            <span style="color:#fff;font-weight:bold">this</span>.Expiration.Text = <span style="color:#0ff;font-weight:bold">&#34;Expiration Date: &#34;</span> + LicenseGlobal.Seal.ExpirationDate.ToString();
+            <span style="color:#fff;font-weight:bold">this</span>.Time.Text = <span style="color:#0ff;font-weight:bold">&#34;Time Remaining: &#34;</span> + LicenseGlobal.Seal.TimeRemaining.ToString();
+            <span style="color:#fff;font-weight:bold">this</span>.License.Text = <span style="color:#0ff;font-weight:bold">&#34;License Type: &#34;</span> + LicenseGlobal.Seal.LicenseType.ToString();
+            <span style="color:#fff;font-weight:bold">this</span>.Unlimited.Text = <span style="color:#0ff;font-weight:bold">&#34;Unlimited Time: &#34;</span> + LicenseGlobal.Seal.UnlimitedTime.ToString();
+            <span style="color:#fff;font-weight:bold">this</span>.Label2.Text = <span style="color:#0ff;font-weight:bold">&#34;Your IP: &#34;</span> + LicenseGlobal.Seal.IPAddress.ToString();
+            <span style="color:#fff;font-weight:bold">this</span>.Label3.Text = <span style="color:#0ff;font-weight:bold">&#34;Product Version: &#34;</span> + LicenseGlobal.Seal.ProductVersion.ToString();
+            <span style="color:#fff;font-weight:bold">this</span>.GUID.Text = <span style="color:#0ff;font-weight:bold">&#34;GUID: &#34;</span> + LicenseGlobal.Seal.GUID;
+        }
+</code></pre></div><p>There&rsquo;s even a news feed. Where I think the author publishes some&hellip; news!?</p>
+<p><img src="/hawkeye/news.feed.png" alt=""></p>
+<p>The vaccine to clean the infected machine as we saw earlier.</p>
+<p><img src="/hawkeye/vacine.png" alt=""></p>
+<p>The lovely and caring Bug Report feature.</p>
+<p><img src="/hawkeye/bug.report.png" alt=""></p>
+<p>As you can see code reuse is not mandatory&hellip;</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp"><span style="color:#fff;font-weight:bold">public</span> <span style="color:#fff;font-weight:bold">void</span> SendBugReport()
+        {
+            <span style="color:#fff;font-weight:bold">try</span>
+            {
+                <span style="color:#fff;font-weight:bold">this</span>.Invoke(<span style="color:#fff;font-weight:bold">new</span> MethodInvoker(delegate
+                {
+                    <span style="color:#fff;font-weight:bold">this</span>.btnReportBug.Enabled = <span style="color:#fff;font-weight:bold">false</span>;
+                }));
+                <span style="color:#fff;font-weight:bold">this</span>.Invoke(<span style="color:#fff;font-weight:bold">new</span> MethodInvoker(delegate
+                {
+                    <span style="color:#fff;font-weight:bold">this</span>.btnReportBug.Text = <span style="color:#0ff;font-weight:bold">&#34;Wait...&#34;</span>;
+                }));
+                <span style="color:#fff;font-weight:bold">this</span>.Invoke(<span style="color:#fff;font-weight:bold">new</span> MethodInvoker(delegate
+                {
+                    <span style="color:#fff;font-weight:bold">this</span>.sBarLabel.Text = <span style="color:#0ff;font-weight:bold">&#34;We are submitting your report, please wait...&#34;</span>;
+                }));
+                <span style="color:#fff;font-weight:bold">this</span>.communication = LicenseGlobal.Seal.GetVariable(<span style="color:#0ff;font-weight:bold">&#34;communication&#34;</span>).Split(<span style="color:#fff;font-weight:bold">new</span> <span style="color:#fff;font-weight:bold">char</span>[]
+                {
+                    <span style="color:#0ff;font-weight:bold">&#39;|&#39;</span>
+                });
+                MailMessage mailMessage = <span style="color:#fff;font-weight:bold">new</span> MailMessage();
+                mailMessage.From = <span style="color:#fff;font-weight:bold">new</span> MailAddress(<span style="color:#fff;font-weight:bold">this</span>.communication[<span style="color:#ff0;font-weight:bold">0</span>]);
+                string addresses = <span style="color:#fff;font-weight:bold">this</span>.communication[<span style="color:#ff0;font-weight:bold">1</span>] + <span style="color:#0ff;font-weight:bold">&#34;,&#34;</span> + <span style="color:#fff;font-weight:bold">this</span>.txtReportEmail.Text;
+                mailMessage.To.Add(addresses);
+                mailMessage.Subject = <span style="color:#0ff;font-weight:bold">&#34;HawkEye Keylogger - Reborn - Report A Bug&#34;</span>;
+                mailMessage.Body = string.Concat(<span style="color:#fff;font-weight:bold">new</span> string[]
+                {
+                    <span style="color:#0ff;font-weight:bold">&#34;Username: &#34;</span>,
+                    LicenseGlobal.Seal.Username.ToString(),
+                    <span style="color:#0ff;font-weight:bold">&#34;</span><span style="color:#0ff;font-weight:bold">\r\n</span><span style="color:#0ff;font-weight:bold">Product: HawkEye Keylogger - Reborn</span><span style="color:#0ff;font-weight:bold">\r\n</span><span style="color:#0ff;font-weight:bold">License Type: &#34;</span>,
+                    LicenseGlobal.Seal.LicenseType.ToString(),
+                    <span style="color:#0ff;font-weight:bold">&#34;</span><span style="color:#0ff;font-weight:bold">\r\n</span><span style="color:#0ff;font-weight:bold">Customer&#39;s Email: &#34;</span>,
+                    <span style="color:#fff;font-weight:bold">this</span>.txtReportEmail.Text,
+                    <span style="color:#0ff;font-weight:bold">&#34;</span><span style="color:#0ff;font-weight:bold">\r\n\r\n\r\n\r\n</span><span style="color:#0ff;font-weight:bold">Subject: </span><span style="color:#0ff;font-weight:bold">\r\n</span><span style="color:#0ff;font-weight:bold">HawkEye Keylogger - Reborn - Report A Bug</span><span style="color:#0ff;font-weight:bold">\r\n\r\n</span><span style="color:#0ff;font-weight:bold">Body: </span><span style="color:#0ff;font-weight:bold">\r\n</span><span style="color:#0ff;font-weight:bold">&#34;</span>,
+                    <span style="color:#fff;font-weight:bold">this</span>.txtReportBody.Text
+                });
+                <span style="color:#fff;font-weight:bold">new</span> SmtpClient(<span style="color:#0ff;font-weight:bold">&#34;mail.hawkspy.net&#34;</span>)
+                {
+                    Port = <span style="color:#ff0;font-weight:bold">25</span>,
+                    DeliveryMethod = SmtpDeliveryMethod.Network,
+                    UseDefaultCredentials = <span style="color:#fff;font-weight:bold">false</span>,
+                    Credentials = <span style="color:#fff;font-weight:bold">new</span> NetworkCredential(<span style="color:#fff;font-weight:bold">this</span>.communication[<span style="color:#ff0;font-weight:bold">0</span>], <span style="color:#fff;font-weight:bold">this</span>.communication[<span style="color:#ff0;font-weight:bold">6</span>] + <span style="color:#0ff;font-weight:bold">&#34;</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">${&#34;</span>),
+                    EnableSsl = <span style="color:#fff;font-weight:bold">false</span>
+                }.Send(mailMessage);
+                <span style="color:#fff;font-weight:bold">this</span>.Invoke(<span style="color:#fff;font-weight:bold">new</span> MethodInvoker(delegate
+                {
+                    CustomMsgBox.Show(<span style="color:#0ff;font-weight:bold">&#34;Success! Your report will be review shortly.&#34;</span>);
+                }));
+                <span style="color:#fff;font-weight:bold">this</span>.Invoke(<span style="color:#fff;font-weight:bold">new</span> MethodInvoker(delegate
+                {
+                    <span style="color:#fff;font-weight:bold">this</span>.btnReportBug.Enabled = <span style="color:#fff;font-weight:bold">true</span>;
+                }));
+                <span style="color:#fff;font-weight:bold">this</span>.Invoke(<span style="color:#fff;font-weight:bold">new</span> MethodInvoker(delegate
+                {
+                    <span style="color:#fff;font-weight:bold">this</span>.btnReportBug.Text = <span style="color:#0ff;font-weight:bold">&#34;Report A Bug&#34;</span>;
+                }));
+                <span style="color:#fff;font-weight:bold">this</span>.Invoke(<span style="color:#fff;font-weight:bold">new</span> MethodInvoker(delegate
+                {
+                    <span style="color:#fff;font-weight:bold">this</span>.sBarLabel.Text = <span style="color:#0ff;font-weight:bold">&#34;Idle...&#34;</span>;
+                }));
+            }
+            <span style="color:#fff;font-weight:bold">catch</span> (Exception expr_1EF)
+            {
+                ProjectData.SetProjectError(expr_1EF);
+                Exception ex = expr_1EF;
+                CustomMsgBox.Show(ex.Message.ToString());
+                <span style="color:#fff;font-weight:bold">this</span>.Invoke(<span style="color:#fff;font-weight:bold">new</span> MethodInvoker(delegate
+                {
+                    <span style="color:#fff;font-weight:bold">this</span>.btnReportBug.Enabled = <span style="color:#fff;font-weight:bold">true</span>;
+                }));
+                <span style="color:#fff;font-weight:bold">this</span>.Invoke(<span style="color:#fff;font-weight:bold">new</span> MethodInvoker(delegate
+                {
+                    <span style="color:#fff;font-weight:bold">this</span>.btnReportBug.Text = <span style="color:#0ff;font-weight:bold">&#34;Report A Bug&#34;</span>;
+                }));
+                <span style="color:#fff;font-weight:bold">this</span>.Invoke(<span style="color:#fff;font-weight:bold">new</span> MethodInvoker(delegate
+                {
+                    <span style="color:#fff;font-weight:bold">this</span>.sBarLabel.Text = <span style="color:#0ff;font-weight:bold">&#34;Idle...&#34;</span>;
+                }));
+                ProjectData.ClearProjectError();
+            }
+        }
+</code></pre></div><p>The must read option simply opens the browser and redirects the user to the <code>HawkEye</code> home page.</p>
+<p><img src="/hawkeye/must.read.png" alt=""></p>
+<p>The tutorial displays the only video the author has for <code>HawkEye Keylogger Reborn</code>. That you can also see on <!-- raw HTML omitted -->YouTube<!-- raw HTML omitted -->.</p>
+<p><img src="/hawkeye/tutorial.png" alt=""></p>
+<p>The Bazaar has more software for interested buyers. More keyloggers in case one is not enough, crypters, and apparently a <code>RAT</code> and an <code>MS Word</code> exploit are in the works.</p>
+<p><img src="/hawkeye/bazaar.png" alt=""></p>
+<p>Lastly and the actual relevant feature&hellip; the keylogger builder.</p>
+<p><img src="/hawkeye/hawkeye.builder.png" alt=""></p>
+<p>The code for the builder is quite big and basically replaces some assemblies with the configuration the user chooses.</p>
+<p><img src="/hawkeye/builder.code.png" alt=""></p>
+<p>Nothing really new.</p>
+<h3 id="keylogger">Keylogger</h3>
+<p>Most of this <code>HawkSpy Keylogger Reborn</code> features and <code>IOCs</code> have already been discussed on the technical articles I point on the &lsquo;References&rsquo; section, so I&rsquo;ll not waste too much time going over them again.</p>
+<p>However, one interesting thing to notice is that even after having his keylogger exposed and cracked on the Internet the author is too lazy to change simple things as the secret key and salt used for configuration settings encryption. Well, to be fair it will not make any difference anyway.</p>
+<p>As you can see the secret is still the same as in previous versions.</p>
+<p><img src="/hawkeye/secret.png" alt=""></p>
+<p>And the salt too.</p>
+<p><img src="/hawkeye/salt.png" alt=""></p>
+<p>With all this information is trivial to decrypt the keylogger settings.</p>
+<p><img src="/hawkeye/encrypted.settings.png" alt=""></p>
+<p>You can use the following small decryption method I wrote in <code>C#</code> to get the configuration.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp"><span style="color:#fff;font-weight:bold">using</span> System;
+<span style="color:#fff;font-weight:bold">using</span> System.Text;
+<span style="color:#fff;font-weight:bold">using</span> System.IO;
+<span style="color:#fff;font-weight:bold">using</span> System.Security.Cryptography;
+
+<span style="color:#fff;font-weight:bold">namespace</span> DecryptHawkEye
+{
+    <span style="color:#fff;font-weight:bold">class</span> Program
+    {
+        <span style="color:#fff;font-weight:bold">public</span> <span style="color:#fff;font-weight:bold">static</span> <span style="color:#fff;font-weight:bold">void</span> HawkeyeDecrypt(byte[] cipherText)
+        {
+            string secret = <span style="color:#0ff;font-weight:bold">&#34;HawkSpySoftwares&#34;</span>;
+            string salt = <span style="color:#0ff;font-weight:bold">&#34;099u787978786&#34;</span>;
+
+            Rfc2898DeriveBytes rfc2898DeriveBytes = <span style="color:#fff;font-weight:bold">new</span> Rfc2898DeriveBytes(secret, Encoding.Unicode.GetBytes(salt));
+            RijndaelManaged rijndaelManaged = <span style="color:#fff;font-weight:bold">new</span> RijndaelManaged();
+            rijndaelManaged.KeySize = <span style="color:#ff0;font-weight:bold">256</span>;
+            rijndaelManaged.IV = rfc2898DeriveBytes.GetBytes(rijndaelManaged.BlockSize / <span style="color:#ff0;font-weight:bold">8</span>);
+            rijndaelManaged.Key = rfc2898DeriveBytes.GetBytes(rijndaelManaged.KeySize / <span style="color:#ff0;font-weight:bold">8</span>);
+            rijndaelManaged.Padding = PaddingMode.PKCS7;
+            ICryptoTransform decryptor = rijndaelManaged.CreateDecryptor();
+            MemoryStream msDecrypt = <span style="color:#fff;font-weight:bold">new</span> MemoryStream(cipherText);
+            CryptoStream csDecrypt = <span style="color:#fff;font-weight:bold">new</span> CryptoStream(msDecrypt, decryptor, CryptoStreamMode.Read);
+            StreamReader srDecrypt = <span style="color:#fff;font-weight:bold">new</span> StreamReader(csDecrypt);
+            Console.WriteLine(srDecrypt.ReadToEnd());
+        }               
+
+        <span style="color:#fff;font-weight:bold">static</span> <span style="color:#fff;font-weight:bold">void</span> Main(string[] args)
+        {
+            HawkeyeDecrypt(Convert.FromBase64String(<span style="color:#0ff;font-weight:bold">&#34;j1MtHYi4MKi7oX7TwhgXiO8F5j27K6p8UgYvmzOEoaEZv2IEbJ9dPQyO4toq4FMA&#34;</span>));
+        }
+    }
+}
+</code></pre></div><p>Since getting access to the configuration of the samples being used in the wild is pretty easy I would avoid using it for &lsquo;serious&rsquo; stealthy operations.</p>
+<p><img src="/hawkeye/decrypt.vs.png" alt=""></p>
+<p>Note that &lsquo;<a href="mailto:bob@mail.lab.org">bob@mail.lab.org</a>&rsquo; is just a local e-mail of my internal lab mail server (mail.lab.org).</p>
+<p>For more details and <code>IOCs</code> I recommend you to read the <code>Trustwave</code>, <code>Malwaredigger</code> and <code>blog.idiom.ca</code>, all listed in the &lsquo;References&rsquo; section. There&rsquo;s no point describing the same thing that have already been described since the only thing that as really changed in this <code>Reborn</code> version is the fact that the actual keylogger is now being downloaded from the Internet in real time and it is not embedded as a &lsquo;Resource&rsquo; any more.</p>
+<h3 id="people-behind-hawkeye-keylogger-and-other-variants">People behind &lsquo;HawkEye Keylogger&rsquo; and other variants</h3>
+<p>Apparently many eventually &ldquo;talented&rdquo; software developers think they can get away with writing, selling and supporting malicious software. The true is it seems that some of the people behind this keylogger have been around for quite some time. Before <code>HawkSpy.net</code> the domain <!-- raw HTML omitted -->hawkeyeproducts.com<!-- raw HTML omitted --> was used and it is not hard to track their operations back to <code>2013/2014</code> but I&rsquo;ll leave that for you as an exercise if you feel like it.</p>
+<p>One thing I later found is that this <code>Net Seal</code> software is/was also being distributed on <code>hackforums</code> as you can see <!-- raw HTML omitted -->here<!-- raw HTML omitted --> and <!-- raw HTML omitted -->here<!-- raw HTML omitted -->. You might want to look at it if you have some free time.</p>
+<h3 id="references">References</h3>
+<h4 id="managed-code-reverse-engineering">Managed Code Reverse Engineering</h4>
+<ul>
+<li><a href="http://www.welivesecurity.com/wp-content/uploads/2015/09/Hartung-VB20151.pdf">http://www.welivesecurity.com/wp-content/uploads/2015/09/Hartung-VB20151.pdf</a></li>
+<li><a href="http://resources.infosecinstitute.com/search/?s=ILDASM">http://resources.infosecinstitute.com/search/?s=ILDASM</a></li>
+<li><a href="https://blogs.msdn.microsoft.com/jankrivanek/2012/11/15/setting-up-managed-code-debugging-with-sos-and-sosex/">https://blogs.msdn.microsoft.com/jankrivanek/2012/11/15/setting-up-managed-code-debugging-with-sos-and-sosex/</a></li>
+<li><a href="https://forum.tuts4you.com/topic/30207-net-decrypt-confuser-19-methods/">https://forum.tuts4you.com/topic/30207-net-decrypt-confuser-19-methods/</a></li>
+<li><a href="https://www.exploit-db.com/docs/38305.pdf">https://www.exploit-db.com/docs/38305.pdf</a></li>
+<li><a href="http://www.stevestechspot.com/">http://www.stevestechspot.com/</a></li>
+</ul>
+<h4 id="hawkeye-keylogger-technical-analysis">HawkEye Keylogger technical analysis</h4>
+<ul>
+<li><a href="https://www.trustwave.com/Resources/SpiderLabs-Blog/How-I-Cracked-a-Keylogger-and-Ended-Up-in-Someone-s-Inbox/">https://www.trustwave.com/Resources/SpiderLabs-Blog/How-I-Cracked-a-Keylogger-and-Ended-Up-in-Someone-s-Inbox/</a></li>
+<li><a href="http://blog.idiom.ca/2015/06/a-look-at-golrotedhawkeye-keylogger.html">http://blog.idiom.ca/2015/06/a-look-at-golrotedhawkeye-keylogger.html</a></li>
+<li><a href="http://www.malwaredigger.com/2015/02/quick-analysis-msilgolroted-stealer.html">http://www.malwaredigger.com/2015/02/quick-analysis-msilgolroted-stealer.html</a></li>
+<li><a href="https://itsjack.cc/blog/2016/05/poor-mans-malware-hawkeye-keylogger-reborn/">https://itsjack.cc/blog/2016/05/poor-mans-malware-hawkeye-keylogger-reborn/</a></li>
+</ul>
+<h4 id="news">News</h4>
+<ul>
+<li><a href="https://www.isightpartners.com/2015/06/hawkeye-keylogger-campaigns-affect-multiple-industries/">https://www.isightpartners.com/2015/06/hawkeye-keylogger-campaigns-affect-multiple-industries/</a></li>
+<li><a href="http://news.softpedia.com/news/hawkeye-keylogger-users-employ-hacked-emails-accounts-to-receive-stolen-data-505958.shtml">http://news.softpedia.com/news/hawkeye-keylogger-users-employ-hacked-emails-accounts-to-receive-stolen-data-505958.shtml</a></li>
+</ul>
+
+      </div>
+
+
+      <footer>
+        
+
+
+        
+        
+        
+      </footer>
+    </article>
+
+    
+  </section>
+
+      </div>
+
+      
+
+    </main>
+
+    
+      
+        
+        <script src="/js/dark-mode.min.0213e1773e6d1c5a644f847c67a6f8abac49a3776e2976f6008038af8c5b76a1.js"></script>
+      
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+  </body>
+
+</html>

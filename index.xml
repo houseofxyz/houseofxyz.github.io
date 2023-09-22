@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>shut up and hack</title>
+    <link>http://deniable.org/</link>
+    <description>Recent content on shut up and hack</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>en</language>
+    <lastBuildDate>Sat, 29 Feb 2020 04:15:29 +0100</lastBuildDate>
+    
+	<atom:link href="http://deniable.org/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>Projects</title>
+      <link>http://deniable.org/projects/</link>
+      <pubDate>Mon, 24 Aug 2020 14:51:28 +0100</pubDate>
+      
+      <guid>http://deniable.org/projects/</guid>
+      <description>I used to participate in several open source projects, now I just stare at debuggers.
+Past Projects  Developer at The OpenBSD Project (committer @rui). Apr 2007 - May 2011. Malware Researcher at The Honeynet Project (mostly detecting and tracking Botnets). Apr 2006 - Sep 2010. Exploit vetter at The Exploit Database, and one of the core members for a heck of a long time. Apr 2010 - Nov 2016.  </description>
+    </item>
+    
+    <item>
+      <title>Windows Kernel Ps Callbacks Experiments</title>
+      <link>http://deniable.org/posts/windows-callbacks/</link>
+      <pubDate>Sat, 29 Feb 2020 04:15:29 +0100</pubDate>
+      
+      <guid>http://deniable.org/posts/windows-callbacks/</guid>
+      <description>I won&amp;rsquo;t be sharing any 0day here (well, maybe a &amp;ldquo;nday&amp;rdquo; if you haven&amp;rsquo;t been looking into ring0 that much). The fact is, there&amp;rsquo;s not much public information about this subject (attacks against the Windows Kernel Ps callbacks). To play a little bit with these kernel callbacks, I &amp;ldquo;wrote&amp;rdquo; (yes, in commas) a pseudo-EDR proof-of-concept (that uses these Ps callbacks). This post tells the story of some of these ring0 experiments.</description>
+    </item>
+    
+    <item>
+      <title>Dynamic Binary Instrumentation Primer</title>
+      <link>http://deniable.org/posts/binary-instrumentation/</link>
+      <pubDate>Wed, 25 Jul 2018 14:11:32 +0100</pubDate>
+      
+      <guid>http://deniable.org/posts/binary-instrumentation/</guid>
+      <description>Dynamic Binary Instrumentation (DBI) is a method of analyzing the behavior of a binary application at runtime through the injection of instrumentation code - Uninformed 2007
+Introduction The purpose of this post is to document my dive into the &amp;ldquo;world&amp;rdquo; of Dynamic Binary Instrumentation. I&amp;rsquo;ll cover some of the most well known and used DBI frameworks. That is Pin, DynamoRIO, and Frida. From these three I&amp;rsquo;ll mainly focus on Pin. There are other DBI frameworks that I won&amp;rsquo;t touch at all, like Valgrind, Triton (uses Pin), QDBI, BAP, Dyninst, plus many others.</description>
+    </item>
+    
+    <item>
+      <title>Practical Symbolic Execution and SATisfiability Module Theories (SMT) 101</title>
+      <link>http://deniable.org/posts/symbolic-execution/</link>
+      <pubDate>Sat, 19 May 2018 11:52:33 +0100</pubDate>
+      
+      <guid>http://deniable.org/posts/symbolic-execution/</guid>
+      <description>Finding bugs is hard, reverse engineering is hard. Constraint solvers are the heart of many program analysis techniques, and can aid Fuzzing, and software verification.
+This post contains a few hands-on experiments with Z3, a high performance theorem prover developed at Microsoft Research by Leonardo de Moura and Nikolaj Bjorner. With KLEE, a Symbolic Execution Engine built on top of the LLVM compiler infrastructure developed by Cristian Cadar, Daniel Dunbar, and Dawson Engler.</description>
+    </item>
+    
+    <item>
+      <title>Cracking Orcus RAT</title>
+      <link>http://deniable.org/posts/cracking-orcus-rat/</link>
+      <pubDate>Tue, 09 Aug 2016 11:23:32 +0100</pubDate>
+      
+      <guid>http://deniable.org/posts/cracking-orcus-rat/</guid>
+      <description>After my previous post here, I got a message from an anonymous source asking me if I would like to have a look at another piece of malware written in managed code (that was also on the news recently). More precisely at the Orcus RAT.
+I follow KrebsonSecurityblog closely and I recognized the name. If you didn&amp;rsquo;t read Brian Krebs post about who&amp;rsquo;s behind Orcus RAT read it here. Not long after &amp;lsquo;Palo Alto Networks&amp;rsquo; Research Group published a follow-up, read it too.</description>
+    </item>
+    
+    <item>
+      <title>Cracking HawkEye Keylogger Reborn</title>
+      <link>http://deniable.org/posts/cracking-hawkeye-keylogger-reborn/</link>
+      <pubDate>Thu, 04 Aug 2016 12:41:23 +0100</pubDate>
+      
+      <guid>http://deniable.org/posts/cracking-hawkeye-keylogger-reborn/</guid>
+      <description>I had never heard of HawkEye Keylogger until I&amp;rsquo;ve read the following blog post from Trustwave. I&amp;rsquo;ve found the amount of features quite interesting and I was curious to have a closer look at the source code.
+After some research it seems this keylogger has been successfully used in some campaigns in the pastand it is still being actively used.
+Actually HawkEye is best known in the AV industry by &#39;Golroted&#39;.</description>
+    </item>
+    
+    <item>
+      <title>About</title>
+      <link>http://deniable.org/about/</link>
+      <pubDate>Mon, 01 Jan 0001 00:00:00 +0000</pubDate>
+      
+      <guid>http://deniable.org/about/</guid>
+      <description>These are not the droids you are looking for.</description>
+    </item>
+    
+  </channel>
+</rss>

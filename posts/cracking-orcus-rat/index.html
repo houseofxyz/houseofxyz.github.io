@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Language" content="en">
+
+    
+    <meta name="description" content="After my previous post here, I got a message from an anonymous source asking me if I would like to have a look at another piece of malware written in managed code (that was also on the news recently). More precisely at the Orcus RAT.
+I follow KrebsonSecurityblog closely and I recognized the name. If you didn&rsquo;t read Brian Krebs post about who&rsquo;s behind Orcus RAT read it here. Not long after &lsquo;Palo Alto Networks&rsquo; Research Group published a follow-up, read it too.">
+    <meta name="keywords" content="homepage, blog, reversing, binary exploitation, kernel, hypervisor, containers">
+
+    <meta name="twitter:card" content="summary"/>
+<meta name="twitter:title" content="Cracking Orcus RAT"/>
+<meta name="twitter:description" content="After my previous post here, I got a message from an anonymous source asking me if I would like to have a look at another piece of malware written in managed code (that was also on the news recently). More precisely at the Orcus RAT.
+I follow KrebsonSecurityblog closely and I recognized the name. If you didn&rsquo;t read Brian Krebs post about who&rsquo;s behind Orcus RAT read it here. Not long after &lsquo;Palo Alto Networks&rsquo; Research Group published a follow-up, read it too."/>
+
+    <meta property="og:title" content="Cracking Orcus RAT" />
+<meta property="og:description" content="After my previous post here, I got a message from an anonymous source asking me if I would like to have a look at another piece of malware written in managed code (that was also on the news recently). More precisely at the Orcus RAT.
+I follow KrebsonSecurityblog closely and I recognized the name. If you didn&rsquo;t read Brian Krebs post about who&rsquo;s behind Orcus RAT read it here. Not long after &lsquo;Palo Alto Networks&rsquo; Research Group published a follow-up, read it too." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="http://deniable.org/posts/cracking-orcus-rat/" />
+<meta property="article:published_time" content="2016-08-09T11:23:32+01:00" />
+<meta property="article:modified_time" content="2016-08-09T11:23:32+01:00" /><meta property="og:site_name" content="shut up and hack" />
+
+
+    <title>
+  Cracking Orcus RAT · shut up and hack
+</title>
+
+    
+      <link rel="canonical" href="http://deniable.org/posts/cracking-orcus-rat/">
+    
+
+    <link rel="preconnect" href="https://fonts.gstatic.com">
+    <link href="https://fonts.googleapis.com/css?family=Lato:400,700%7CMerriweather:300,700%7CSource+Code+Pro:400,700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fork-awesome@1.1.7/css/fork-awesome.min.css"
+      integrity="sha256-gsmEoJAws/Kd3CjuOQzLie5Q3yshhvmo7YNtBG7aaEY=" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/normalize.css@8/normalize.min.css">
+    
+      
+      
+      <link rel="stylesheet" href="/css/coder.min.15d3dcd7d56ff7df8a54a0659da83058d38fb1814fa8dad387efc92034b70def.css" integrity="sha256-FdPc19Vv99&#43;KVKBlnagwWNOPsYFPqNrTh&#43;/JIDS3De8=" crossorigin="anonymous" media="screen" />
+    
+
+    
+
+    
+      
+        
+        
+        <link rel="stylesheet" href="/css/coder-dark.min.126ad3988d46bdae6217a11105b53c9662bca05f39d42d3c0fb366919d334620.css" integrity="sha256-EmrTmI1Gva5iF6ERBbU8lmK8oF851C08D7NmkZ0zRiA=" crossorigin="anonymous" media="screen" />
+      
+    
+
+    
+
+    
+
+    <link rel="icon" type="image/png" href="/images/favicon-32x32.png" sizes="32x32">
+    <link rel="icon" type="image/png" href="/images/favicon-16x16.png" sizes="16x16">
+
+    <link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon.png">
+
+    
+
+    <meta name="generator" content="Hugo 0.74.3" />
+  </head>
+
+  
+  
+    
+  
+  <body class="colorscheme-dark"
+        onload=""
+  >
+    
+<div class="float-container">
+    <a id="dark-mode-toggle" class="colorscheme-toggle">
+        <i class="fa fa-adjust fa-fw" aria-hidden="true"></i>
+    </a>
+</div>
+
+
+    <main class="wrapper">
+      <nav class="navigation">
+  <section class="container">
+    <a class="navigation-title" href="/">
+      shut up and hack
+    </a>
+    
+      <input type="checkbox" id="menu-toggle" />
+      <label class="menu-button float-right" for="menu-toggle">
+        <i class="fa fa-bars fa-fw" aria-hidden="true"></i>
+      </label>
+      <ul class="navigation-list">
+        
+          
+            <li class="navigation-item">
+              <a class="navigation-link" href="/posts/">Blog</a>
+            </li>
+          
+            <li class="navigation-item">
+              <a class="navigation-link" href="/projects">Projects</a>
+            </li>
+          
+            <li class="navigation-item">
+              <a class="navigation-link" href="/about">About</a>
+            </li>
+          
+        
+        
+      </ul>
+    
+  </section>
+</nav>
+
+
+      <div class="content">
+        
+  <section class="container post">
+    <article>
+      <header>
+        <div class="post-title">
+          <h1 class="title">Cracking Orcus RAT</h1>
+        </div>
+        <div class="post-meta">
+          <div class="date">
+            <span class="posted-on">
+              <i class="fa fa-calendar" aria-hidden="true"></i>
+              <time datetime='2016-08-09T11:23:32&#43;01:00'>
+                August 9, 2016
+              </time>
+            </span>
+            <span class="reading-time">
+              <i class="fa fa-clock-o" aria-hidden="true"></i>
+              12-minute read
+            </span>
+          </div>
+          
+          
+          
+        </div>
+      </header>
+
+      <div>
+        
+        <p>After my previous post <!-- raw HTML omitted -->here<!-- raw HTML omitted -->, I got a message from an anonymous source asking me if I would like to have a look at another piece of malware written in managed code (that was also on the news recently). More precisely at the <code>Orcus RAT</code>.</p>
+<p>I follow <!-- raw HTML omitted -->KrebsonSecurity<!-- raw HTML omitted --> blog closely and I recognized the name. If you didn&rsquo;t read Brian Krebs post about who&rsquo;s behind <code>Orcus RAT</code> read it <!-- raw HTML omitted -->here<!-- raw HTML omitted -->. Not long after &lsquo;Palo Alto Networks&rsquo; Research Group published a follow-up, read it <!-- raw HTML omitted -->too<!-- raw HTML omitted -->. Based on the small research I did about this tool I think &lsquo;Palo Alto&rsquo; got their facts right.</p>
+<p>At first I thought I could be dealing with someone trying to &lsquo;phish&rsquo; me, but the offer was legit. <em>Challenge accepted</em>. The zip file I got is for version 1.4.2 (which is the latest version available at the &lsquo;Orcus RAT&rsquo; <!-- raw HTML omitted -->website<!-- raw HTML omitted -->, at the time of this writing). The zip file is massive. Here&rsquo;s the whole contents of the zip file.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-fallback" data-lang="fallback">C:\Users\rui\Orcus1.4.2&gt;dir
+ Volume in drive C has no label.
+ Volume Serial Number is 90AE-F306
+
+ Directory of C:\Users\rui\Orcus1.4.2
+
+08/07/2016  02:29 PM    &lt;DIR&gt;          .
+08/07/2016  02:29 PM    &lt;DIR&gt;          ..
+07/31/2016  09:07 PM    &lt;DIR&gt;          libraries
+07/31/2016  09:05 PM        17,172,040 Orcus.Administration.exe
+07/08/2016  02:38 PM             1,165 Orcus.Administration.exe.config
+07/31/2016  09:05 PM         1,994,240 Orcus.Administration.pdb
+               3 File(s)     19,167,445 bytes
+               3 Dir(s)  23,307,132,928 bytes free
+
+C:\Users\rui\Orcus1.4.2&gt;dir libraries
+ Volume in drive C has no label.
+ Volume Serial Number is 90AE-F268
+
+ Directory of C:\Users\rui\Orcus1.4.2\libraries
+
+07/31/2016  09:07 PM    &lt;DIR&gt;          .
+07/31/2016  09:07 PM    &lt;DIR&gt;          ..
+04/06/2016  03:47 PM            78,848 Be.Windows.Forms.HexBox.dll
+09/04/2015  07:28 PM            76,004 Be.Windows.Forms.HexBox.xml
+05/28/2016  10:35 AM           518,656 CSCore.dll
+05/28/2016  10:35 AM         1,448,738 CSCore.xml
+05/12/2016  08:21 PM            72,704 Exceptionless.Extras.dll
+05/10/2016  12:11 PM             4,982 Exceptionless.Extras.xml
+05/12/2016  08:21 PM           694,784 Exceptionless.Portable.dll
+05/10/2016  12:11 PM           641,422 Exceptionless.Portable.xml
+04/06/2016  03:48 PM            44,032 FluentCommandLineParser.dll
+12/16/2015  06:11 PM           140,800 FluentCommandLineParser.pdb
+12/16/2015  06:11 PM           118,978 FluentCommandLineParser.xml
+08/11/2014  08:28 PM            54,784 GongSolutions.Wpf.DragDrop.dll
+08/11/2014  08:28 PM            95,744 GongSolutions.Wpf.DragDrop.pdb
+08/11/2014  08:28 PM            27,248 GongSolutions.Wpf.DragDrop.xml
+05/18/2016  08:22 PM           606,208 ICSharpCode.AvalonEdit.dll
+05/18/2016  08:22 PM           552,367 ICSharpCode.AvalonEdit.xml
+01/29/2016  10:31 PM           940,544 MahApps.Metro.dll
+01/29/2016  10:31 PM         1,123,840 MahApps.Metro.pdb
+01/29/2016  10:31 PM           346,311 MahApps.Metro.xml
+02/27/2016  02:59 PM            37,104 Microsoft.Threading.Tasks.dll
+02/27/2016  02:59 PM            51,059 Microsoft.Threading.Tasks.xml
+08/19/2015  06:13 PM           280,576 Mono.Cecil.dll
+06/13/2016  10:06 PM           526,336 Newtonsoft.Json.dll
+06/13/2016  10:06 PM           523,221 Newtonsoft.Json.xml
+06/12/2016  11:23 PM           529,408 NLog.dll
+06/12/2016  11:23 PM         1,245,550 NLog.xml
+04/06/2016  05:49 PM         2,686,464 nUpdate.dll
+04/06/2016  05:47 PM           214,528 nUpdate.pdb
+07/16/2015  05:14 PM           107,696 Ookii.Dialogs.Wpf.dll
+07/16/2015  05:14 PM           169,200 Ookii.Dialogs.Wpf.xml
+07/31/2016  09:05 PM           113,736 Orcus.Administration.Commands.dll
+07/31/2016  09:05 PM           239,104 Orcus.Administration.Commands.pdb
+07/03/2016  02:54 PM            84,552 Orcus.Administration.Licensing.dll
+07/03/2016  02:54 PM            84,552 Orcus.Administration.Licensing.pdb
+07/31/2016  09:05 PM            34,888 Orcus.Administration.Plugins.dll
+07/31/2016  09:05 PM            75,264 Orcus.Administration.Plugins.pdb
+07/31/2016  09:05 PM            25,672 Orcus.Administration.StaticCommands.dll
+07/31/2016  09:05 PM            77,312 Orcus.Administration.StaticCommands.pdb
+07/31/2016  09:05 PM            22,088 Orcus.Plugins.dll
+07/31/2016  09:05 PM            36,352 Orcus.Plugins.pdb
+07/31/2016  09:05 PM           298,056 Orcus.Shared.dll
+07/31/2016  09:05 PM           509,440 Orcus.Shared.pdb
+07/03/2016  02:54 PM            26,184 Orcus.Shared.Utilities.dll
+07/03/2016  02:54 PM            36,352 Orcus.Shared.Utilities.pdb
+03/11/2016  10:08 PM           498,688 OxyPlot.dll
+03/11/2016  10:08 PM         1,439,232 OxyPlot.pdb
+03/11/2016  10:08 PM           147,456 OxyPlot.Wpf.dll
+03/11/2016  10:08 PM           423,424 OxyPlot.Wpf.pdb
+03/11/2016  10:08 PM           271,094 OxyPlot.Wpf.xml
+03/11/2016  10:08 PM           965,402 OxyPlot.xml
+03/11/2016  10:08 PM            13,312 OxyPlot.Xps.dll
+03/11/2016  10:08 PM            26,112 OxyPlot.Xps.pdb
+03/11/2016  10:08 PM            11,098 OxyPlot.Xps.xml
+07/03/2016  02:54 PM            44,032 Sorzus.Wpf.Toolkit.dll
+07/03/2016  02:54 PM           122,368 Sorzus.Wpf.Toolkit.pdb
+02/18/2016  08:05 PM           135,168 Sparrow.Chart.Wpf.40.dll
+02/18/2016  08:05 PM           152,399 Sparrow.Chart.Wpf.40.xml
+05/25/2016  07:20 PM            49,152 starksoft.aspen.dll
+05/25/2016  07:20 PM            79,360 starksoft.aspen.pdb
+05/25/2016  07:20 PM            55,969 starksoft.aspen.xml
+01/29/2016  10:31 PM            55,904 System.Windows.Interactivity.dll
+08/19/2015  07:04 PM            77,824 Vestris.ResourceLib.dll
+08/19/2015  07:04 PM           299,347 Vestris.ResourceLib.xml
+06/14/2016  01:06 PM         1,042,944 Xceed.Wpf.Toolkit.dll
+              64 File(s)     21,531,973 bytes
+               2 Dir(s)  23,307,132,928 bytes free
+</code></pre></div><p>Interesting to notice that the author includes the <code>.pdb</code> files on the package. According to wikipedia, <em>Program database (PDB) is a proprietary file format (developed by Microsoft) for storing debugging information about a program (or, commonly, program modules such as a DLL or EXE). PDB files commonly have a .pdb extension. A PDB file is typically created from source files during compilation</em>.</p>
+<p>I started by loading <code>Orcus.Administration.exe</code> in <code>CFF Explorer</code>. As you can see it is a very recent build.</p>
+<p><img src="/orcus/cff.png" alt=""></p>
+<p>&lsquo;Orcus.Administration.exe'<!-- raw HTML omitted -->
+<strong>SHA256</strong>: 4056ee5b23e47d172b48c84ceb5b6eca5ee68cf839dc7e5f28e984005ed7dcea</p>
+<h3 id="dynamic-analysis">Dynamic Analysis</h3>
+<p>As usual I started by running it inside a VM without Internet access and I was presented with the following screens.</p>
+<p><img src="/orcus/1.png" alt=""></p>
+<p><img src="/orcus/2.png" alt=""></p>
+<p><img src="/orcus/3.png" alt=""></p>
+<p><img src="/orcus/4.png" alt=""></p>
+<p>Without a license it seems I can&rsquo;t do anything else. While monitoring the <code>DNS</code> I observed queries to <code>collector.exceptionless.io</code>.</p>
+<h3 id="reverse-engineering-managed-code">Reverse Engineering Managed Code</h3>
+<p>The first thing I noticed when I loaded <code>Orcus.Administration.exe</code> in <code>CFF Explorer</code> was that the assembly was signed. See bellow the fields <code>StrongNameSignature RVA</code> and <code>StrongNameSignature Size</code>.</p>
+<p><img src="/orcus/signed.png" alt=""></p>
+<p>Meaning it wouldn&rsquo;t be possible to change it (I read a little bit about it while researching for my previous post). Well, I can change it, but it won&rsquo;t load. This signing process is best known as &lsquo;Strong Names&rsquo;. Usually you use &lsquo;Strong Names&rsquo; to verify an assembly publisher&rsquo;s identity. When you add a &lsquo;Strong Name&rsquo; to an assembly you use a private key (part of an asymmetric public/private key pair) to generate a cryptographic hash and the public key is included in the assembly, along with the hash. I&rsquo;m not an expert on this. I advise you read the &lsquo;References&rsquo; at the end of this post if you want to know more. Which is actually what I did too. Anyway, more on this later.</p>
+<p>I started by loading <code>Orcus.Administration.exe</code> and all its <code>DLL</code>'s in <code>ILSpy</code>.</p>
+<p><img src="/orcus/ilspy.png" alt=""></p>
+<p>The first surprise was that at the first glance no code obfuscation was used. Apparently I could browse the whole code without any problem. With one exception. As you can see in the picture above the <code>DLL</code> &lsquo;Orcus.Administration.Licensing&rsquo; wasn&rsquo;t loaded properly. So, I opened it on <code>CFF Explorer</code> and noticed a few things. The MetaData had two <code>GUID</code>'s, instead of one.</p>
+<p><img src="/orcus/guids.png" alt=""></p>
+<p>The Assembly Tables were two also, instead of one, and the &lsquo;Culture&rsquo; field had what it looked like Chinese characters. First sign of obfuscation.</p>
+<p><img src="/orcus/assembly.table.png" alt=""></p>
+<p>And by looking at the <code>GUID</code>'s Blobs I could see this <code>DLL</code> was obfuscated with <!-- raw HTML omitted -->ConfuserEX<!-- raw HTML omitted -->.</p>
+<p><img src="/orcus/confuser.png" alt=""></p>
+<p>I prayed a bit (unpacking &lsquo;Confuser&rsquo; can be a nightmare) and launched <code>UnConfuserEx v1.0</code>, you can find this tool in some Reverse Engineering Forums. Usually it is not that simple&hellip; but surprisingly it worked.</p>
+<p><img src="/orcus/confuser.load.png" alt=""></p>
+<p>I went to the &lsquo;libraries&rsquo; directory, renamed &lsquo;Orcus.Administration.Licensing-unpacked.exe&rsquo; to &lsquo;Orcus.Administration.Licensing.dll&rsquo; and loaded it again in <code>ILSpy</code>. It loaded like a charm. Great.</p>
+<p><img src="/orcus/confused.dll.loaded.png" alt=""></p>
+<p>No more signs of code obfuscation (well this isn&rsquo;t entirely true as you will see later). <em>Only</em> a group of assemblies signed.</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-fallback" data-lang="fallback">C:\Users\rui\Orcus1.4.2&gt;sn -v Orcus.Administration.exe
+
+Microsoft (R) .NET Framework Strong Name Utility  Version 4.0.30319.0
+Copyright (c) Microsoft Corporation.  All rights reserved.
+
+Assembly &#39;Orcus.Administration.exe&#39; is valid
+
+C:\Users\rui\Orcus1.4.2&gt;sn -Tp Orcus.Administration.exe
+
+Microsoft (R) .NET Framework Strong Name Utility  Version 4.0.30319.0
+Copyright (c) Microsoft Corporation.  All rights reserved.
+
+Public key (hash algorithm: sha1):
+00240000048000009400000006020000002400005253413100040000010001002983fb7aeaa4de
+53d88a60e791a73e94711f04846b90b2a0b91030f1f680b6ea135ee2a1e7ddc9d903535c91f729
+d8005200b9724a6dc7a22d0d50b7be54ee77b8dfc03b8cc59e1ee057ed6faacbe222ad98fcda47
+7fdcd77e99c261df8a5d57e2828acaaef45e68417953e59ebf06252427a78c8a5f6c3237efdd21
+8fc71be5
+
+Public key token is 851aa33cb9b88f1c
+
+C:\Users\rui\Orcus1.4.2&gt;
+</code></pre></div><p>And the complete list of signed assemblies was:</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-fallback" data-lang="fallback">Orcus.Administration.exe
+libraries/Be.Windows.Forms.HexBox.dll
+libraries/Exceptionless.Extras.dll
+libraries/Exceptionless.Portable.dll
+libraries/FluentCommandLineParser.dll
+libraries/nUpdate.dll
+libraries/Orcus.Administration.Commands.dll
+libraries/Orcus.Administration.Licensing.dll
+libraries/Orcus.Administration.Plugins.dll
+libraries/Orcus.Administration.StaticCommands.dll
+libraries/Orcus.Plugins.dll
+libraries/Orcus.Shared.dll
+libraries/Orcus.Shared.Utilities.dll
+libraries/Sorzus.Wpf.Toolkit.dll
+</code></pre></div><h3 id="cracking-orcus-rat">Cracking Orcus RAT</h3>
+<p>I started looking at code trying to find a good place to bypass the Registration/License process. You might be wondering, what about the fact that the assemblies are signed to avoid tampering? Don&rsquo;t worry, I&rsquo;ll get there.</p>
+<p>After a while, I found what I thought it would be the best place to bypass the licensing process. By looking at the <code>Administration</code> class code and the method <code>OnStartup(StartupEventArgs)</code> I&rsquo;ve found the following lines of code:</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-cpp" data-lang="cpp">    Application.Current.Resources.MergedDictionaries.RemoveAt(Application.Current.Resources.MergedDictionaries.Count - <span style="color:#ff0;font-weight:bold">3</span>);
+    FileInfo expr_F1 = <span style="color:#fff;font-weight:bold">new</span> FileInfo(CommandLineArgs.Current.LicenseFilePath ?? <span style="color:#0ff;font-weight:bold">&#34;license.orcus&#34;</span>);
+    <span style="color:#fff;font-weight:bold">if</span> (!expr_F1.Exists)
+    {
+        Application.Current.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+        <span style="color:#fff;font-weight:bold">if</span> (<span style="color:#fff;font-weight:bold">new</span> RegisterOrcusWindow().ShowDialog() != <span style="color:#fff;font-weight:bold">true</span>)
+        {
+            Environment.Exit(<span style="color:#ff0;font-weight:bold">0</span>);
+        }
+    }
+    App.License = License.Parse(File.ReadAllText(expr_F1.FullName));
+    <span style="color:#fff;font-weight:bold">if</span> (!App.License.IsValid)
+    {
+        MessageBox.Show(<span style="color:#0ff;font-weight:bold">&#34;Invalid license.&#34;</span>, <span style="color:#0ff;font-weight:bold">&#34;Error&#34;</span>, MessageBoxButton.OK, MessageBoxImage.Hand);
+        Environment.Exit(<span style="color:#ff0;font-weight:bold">0</span>);
+    }
+    Logger.Log(LogLevel.Logo, <span style="color:#0ff;font-weight:bold">&#34; ____  ____  ____  _     ____ </span><span style="color:#0ff;font-weight:bold">\r\n</span><span style="color:#0ff;font-weight:bold">/  _ </span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">/  __</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">/   _</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">/ </span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold"> /</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">/ ___</span><span style="color:#0ff;font-weight:bold">\\\r\n</span><span style="color:#0ff;font-weight:bold">| / </span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">||  </span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">/||  /  | | |||    </span><span style="color:#0ff;font-weight:bold">\\\r\n</span><span style="color:#0ff;font-weight:bold">| </span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">_/||    /|  </span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">_ | </span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">_/|</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">___ |</span><span style="color:#0ff;font-weight:bold">\r\n\\</span><span style="color:#0ff;font-weight:bold">____/</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">_/</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">_</span><span style="color:#0ff;font-weight:bold">\\\\</span><span style="color:#0ff;font-weight:bold">____/</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">____/</span><span style="color:#0ff;font-weight:bold">\\</span><span style="color:#0ff;font-weight:bold">____/&#34;</span>);
+    Logger.Log(LogLevel.Logo, string.Format(<span style="color:#0ff;font-weight:bold">&#34;</span><span style="color:#0ff;font-weight:bold">\n</span><span style="color:#0ff;font-weight:bold">&lt;&lt;&lt;&lt;&lt;&lt;&lt; {0}: {1} || {2}: Sorzus (Orcus Technologies) &gt;&gt;&gt;&gt;&gt;&gt;&gt;&#34;</span>, (string)Application.Current.Resources[<span style="color:#0ff;font-weight:bold">&#34;Version&#34;</span>], Assembly.GetExecutingAssembly().GetName().Version, (string)Application.Current.Resources[<span style="color:#0ff;font-weight:bold">&#34;Developer&#34;</span>]));
+    PluginManager.Current.Initialize();
+</code></pre></div><p>I thought, if I remove the <code>Environment.Exit(0);</code> call inside the if statement that checks if the License is valid, the application should proceed whatever is inside the file <code>license.orcus</code>, assuming it exists.</p>
+<p>Cool, so I only need to figure out how to bypass the signed assemblies &lsquo;thing&rsquo;. To start, and avoid the risk of introducing errors by making the wrong changes in the <code>IL</code> code, I decided to change only the contents of the <code>MessageBox</code> that should be shown if the license is invalid. So, I changed it as shown below.</p>
+<p><img src="/orcus/no.problem.png" alt=""></p>
+<p>And here comes the trick. <code>ILSpy</code>, or actually the <code>Reflexil</code> plugin, will say that it can&rsquo;t save the file because the assembly is signed. It gives you multiple options though.</p>
+<!-- raw HTML omitted -->
+<p>To be honest my first approach was &lsquo;Remove Strong Name&rsquo;. If you look online you will find this as a possible solution, and in fact it is. However, I couldn&rsquo;t make it work with <code>Orcus RAT</code>. The usual examples and &lsquo;crackmes&rsquo; you find online apply only to one executable file (see the article in &lsquo;References&rsquo;) and not to complex/big projects as <code>Orcus RAT</code>. I tried to remove the &lsquo;Strong Name&rsquo; not only for <code>Orcus.Administration.exe</code> but also all the <code>DLL</code>s listed above (as signed), plus all the &lsquo;References&rsquo; I could find in all these files. I still couldn&rsquo;t launch <code>Orcus.Administration.exe</code> successfully, as it fails to load with a <code>System.IO.FileLoadException</code> due to <strong>tampered signature</strong>.</p>
+<p><img src="/orcus/orcus.borked.png" alt=""></p>
+<p>After some frustrating attempts I decided to take a different approach. Even though it is possible to do it the way I was trying. If you know what I could be missing please let me know. I&rsquo;m pretty sure we can do this in multiple different ways anyway.</p>
+<p>The second option, &lsquo;Re-sign with key&rsquo; doesn&rsquo;t apply as we don&rsquo;t have the private key. The first and second on the screen below aren&rsquo;t available because I don&rsquo;t have &lsquo;sn.exe&rsquo; in my <code>PATH</code> variable (<code>sn.exe</code> is shipped with the Windows SDK kit), it doesn&rsquo;t matter because I can do it manually.</p>
+<p><img src="/orcus/delay.signed.png" alt=""></p>
+<p>The first option &lsquo;Register it for verification skipping (on this computer)&rsquo; means we can actually disable windows &lsquo;Strong Name&rsquo; validation (see the &lsquo;References&rsquo;). Note that disabling the strong name verification may introduce a vulnerability. A malicious assembly could use the assembly name, version, culture, and public key token of the assembly added to the skip verification list to fake its identity. Which would allow the malicious assembly to also skip verification. I advise you to do it only in a non production environment.</p>
+<p>To accomplish this task we will use the <code>sn.exe</code> utility. As we saw before we can use <code>sn.exe -Tp &lt;assembly&gt;</code> to view the public key token, so what we are going to do now to drop the assembly verification is running <code>sn.exe</code> the following way (as administrator).</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-fallback" data-lang="fallback">C:\Users\rui\Orcus1.4.2&gt;sn -Tp Orcus.Administration.exe
+
+Microsoft (R) .NET Framework Strong Name Utility  Version 4.0.30319.0
+Copyright (c) Microsoft Corporation.  All rights reserved.
+
+Public key (hash algorithm: sha1):
+00240000048000009400000006020000002400005253413100040000010001002983fb7aeaa4de
+53d88a60e791a73e94711f04846b90b2a0b91030f1f680b6ea135ee2a1e7ddc9d903535c91f729
+d8005200b9724a6dc7a22d0d50b7be54ee77b8dfc03b8cc59e1ee057ed6faacbe222ad98fcda47
+7fdcd77e99c261df8a5d57e2828acaaef45e68417953e59ebf06252427a78c8a5f6c3237efdd21
+8fc71be5
+
+Public key token is 851aa33cb9b88f1c
+
+C:\Users\rui\Orcus1.4.2&gt;sn -Vr *,851aa33cb9b88f1c
+
+Microsoft (R) .NET Framework Strong Name Utility  Version 4.0.30319.0
+Copyright (c) Microsoft Corporation.  All rights reserved.
+
+Verification entry added for assembly &#39;*,851aa33cb9b88f1c&#39;
+
+C:\Users\rui\Orcus1.4.2&gt;
+</code></pre></div><p>Now if you look at the registry you will see a new entry for &lsquo;Strong Name&rsquo; verification skipping. Basically what we just did manually was the first option <code>Reflexil</code> gave us before.</p>
+<p><img src="/orcus/registry.png" alt=""></p>
+<p>As you can see only the assemblies with the public key <code>851aa33cb9b88f1c</code> will be skipped, if you feel lazy or you don&rsquo;t care just run <code>sn.exe</code> as follows:</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-fallback" data-lang="fallback">sn -Vr *
+</code></pre></div><p>An entry for all assemblies (*.*) will be added. By the way if you want to bring back your previous settings <code>sn.exe -Vu &lt;assembly&gt;</code> is your friend.</p>
+<p>Now the interesting thing, if you select option &lsquo;4. Cancel and keep it delay signed&rsquo; when saving your patched file with <code>Reflexil</code> it will remove the &lsquo;Strong Name&rsquo; and replace it with a delay signature, but most of the time this does not prevent the assembly from loading. And in fact it does not. Forget all the <code>sn.exe</code> <em>kung fu</em> above, you don&rsquo;t need it.</p>
+<p>If we run our patched <code>Orcus.Administration.exe</code> now it will run without any problems. Well, more or less.</p>
+<p><img src="/orcus/more.or.less.png" alt=""></p>
+<p>It seems my thought about simply create an empty &lsquo;license.orcus&rsquo; file was wrong. So, I went back to the code. I was definitely in the right place to bypass the &lsquo;Registration/License&rsquo; mechanism, so I decided to do the following changes instead:</p>
+<p><img src="/orcus/il.changes.1.png" alt=""></p>
+<p>Basically I replaced the <code>IL</code> instructions below (3 and 4) with <code>nops</code> (above). Note: I later found this isn&rsquo;t really necessary, you actually can keep these instructions.</p>
+<p><img src="/orcus/nops.png" alt=""></p>
+<p>And then I deleted all the IL instructions between lines 63 and 108 (sorry too many to list them here). I gave it a try again, and&hellip;</p>
+<p><img src="/orcus/cracked.png" alt=""></p>
+<p>It works! Mission Accomplished?!</p>
+<p><img src="/orcus/bummer.png" alt=""></p>
+<p>Not really. While I can bypass the registration and create the server when trying to create the &lsquo;bot&rsquo; it fails with a <code>System.NullReferenceException</code> under <code>Orcus.Administration.Build.Builder.ApplySettings</code>. So, I started looking at the code again&hellip; and by looking at the code below I could see why. A reference to something that we bypassed earlier, <code>App.License.get_HardwareId()</code>.</p>
+<p><img src="/orcus/reference.license.png" alt=""></p>
+<p>The license mechanism was bypassed so this is definitely not initialized. I tried to look at the code of this method.</p>
+<p><img src="/orcus/but.seriously.png" alt=""></p>
+<p>Not really helpful. While still lurking around this <code>Orcus.Administration.Licensing</code> <code>DLL</code> code I spotted another method also called <code>get_hardwareId</code> but under <code>HardwareIdGenerator</code>.</p>
+<p><img src="/orcus/get.hardware.png" alt=""></p>
+<p>However, it seems even though we were able to use <code>UnConfuserEx</code> to unpack the code it seems that&rsquo;s still a layer of obfuscation here. Or am I too tired to even try to understand what this method does?</p>
+<p>After looking around and around I&rsquo;ve found that this method is used if you launch the application via the command line, as:</p>
+<div class="highlight"><pre style="color:#e5e5e5;background-color:#000;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-fallback" data-lang="fallback">C:\users\rui\Desktop\Orcus.Administration.exe /hardwareid
+</code></pre></div><p>Which will open the following window.</p>
+<p><img src="/orcus/hardwareid.png" alt=""></p>
+<p>There are a few more command line options as you can see below.</p>
+<p><img src="/orcus/command.line.png" alt=""></p>
+<p>None looks useful. But, we have the code to generate the <code>HardwareId</code> inside the same <code>DLL</code>. So if I change the code below&hellip;</p>
+<p><img src="/orcus/code.to.patch.png" alt=""></p>
+<p>To the code below&hellip; I might not get the same <code>System.NullReferenceException</code> any more.</p>
+<p><img src="/orcus/fixed.code.png" alt=""></p>
+<p>I tried and&hellip; yes, now it works!</p>
+<p><img src="/orcus/done.png" alt=""></p>
+<p>Well, it wasn&rsquo;t that easy, I struggled a bit to get it right. Anyway, &lsquo;Mission Accomplished&rsquo;. I&rsquo;m not sharing the sample, sorry (unless it is for research purposes and I can easily verify your intentions are legit). Otherwise, don&rsquo;t ask.</p>
+<p>I&rsquo;m pretty sure I could have &lsquo;cracked&rsquo; this software in a different way, if you feel like sharing your approach please e-mail me.</p>
+<h3 id="orcus-rat-features">Orcus RAT Features</h3>
+<p>I&rsquo;m not selling the RAT so I&rsquo;ll not go into detail about <code>Orcus RAT</code> features. Anyway, I played a bit with the <code>RAT</code> and I must say that there are multiple hours of development here. What I&rsquo;ve found most interesting was actually the architecture. See below (picture from &lsquo;Palo Alto&rsquo; blog <!-- raw HTML omitted -->post<!-- raw HTML omitted -->).</p>
+<p><img src="/orcus/Orcus.Palo.Alto.1.png" alt=""></p>
+<p>More or less what I would do if I was writing a <code>RAT</code>, for &lsquo;Red Team&rsquo; exercises of course. Basically a three-part infrastructure model. An administration panel, the client (call it &lsquo;bot&rsquo; or whatever), and an intermediary server. This will increase resilience and make it harder to detect/erradicate/take down. You must assume that some of your servers are going to be found and you need to be able to redirect &lsquo;bots&rsquo; to other servers. Both the infected victim and the <code>Orcus RAT</code> operator will use the server as a proxy to exchange commands and relay information. If you want to know more read the &lsquo;Palo Alto&rsquo; blog post and there&rsquo;s a small tutorial on <!-- raw HTML omitted -->hackforums<!-- raw HTML omitted --> and even a <!-- raw HTML omitted -->video<!-- raw HTML omitted --> on YouTube.</p>
+<h3 id="references">References</h3>
+<h4 id="managed-code-reverse-engineering">Managed Code Reverse Engineering</h4>
+<ul>
+<li><a href="http://www.codeproject.com/Articles/8874/Strong-Names-Explained">http://www.codeproject.com/Articles/8874/Strong-Names-Explained</a></li>
+<li><a href="http://resources.infosecinstitute.com/dot-net-assemblies-and-strong-name-signature/">http://resources.infosecinstitute.com/dot-net-assemblies-and-strong-name-signature/</a></li>
+<li><a href="http://www.codeproject.com/Articles/20565/Assembly-Manipulation-and-C-VB-NET-Code-Injection">http://www.codeproject.com/Articles/20565/Assembly-Manipulation-and-C-VB-NET-Code-Injection</a></li>
+<li><a href="http://stackoverflow.com/questions/12360400/strongname-a-net-assembly-without-access-to-original-keyfile">http://stackoverflow.com/questions/12360400/strongname-a-net-assembly-without-access-to-original-keyfile</a></li>
+<li><a href="http://stackoverflow.com/questions/13346265/how-to-prevent-spoofing-of-dlls-in-net">http://stackoverflow.com/questions/13346265/how-to-prevent-spoofing-of-dlls-in-net</a></li>
+<li><a href="https://tuts4you.com/download.php?view.2701">https://tuts4you.com/download.php?view.2701</a></li>
+<li><a href="https://tuts4you.com/download.php?view.1197">https://tuts4you.com/download.php?view.1197</a></li>
+<li><a href="https://blogs.msdn.microsoft.com/securitytools/2009/12/30/how-to-turn-off-strong-name-validation/">https://blogs.msdn.microsoft.com/securitytools/2009/12/30/how-to-turn-off-strong-name-validation/</a></li>
+</ul>
+<h4 id="orcus-rat-technical-analysis">Orcus RAT technical analysis</h4>
+<ul>
+<li><a href="http://researchcenter.paloaltonetworks.com/2016/08/unit42-orcus-birth-of-an-unusual-plugin-builder-rat/">http://researchcenter.paloaltonetworks.com/2016/08/unit42-orcus-birth-of-an-unusual-plugin-builder-rat/</a></li>
+</ul>
+<h4 id="news">News</h4>
+<ul>
+<li><a href="http://krebsonsecurity.com/2016/07/canadian-man-is-author-of-popular-orcus-rat/">http://krebsonsecurity.com/2016/07/canadian-man-is-author-of-popular-orcus-rat/</a></li>
+<li><a href="http://news.softpedia.com/news/meet-orcus-latest-addition-to-the-rat-market-506006.shtml">http://news.softpedia.com/news/meet-orcus-latest-addition-to-the-rat-market-506006.shtml</a></li>
+<li><a href="https://twitter.com/malwrhunterteam/status/750224798912024576">https://twitter.com/malwrhunterteam/status/750224798912024576</a></li>
+</ul>
+
+      </div>
+
+
+      <footer>
+        
+
+
+        
+        
+        
+      </footer>
+    </article>
+
+    
+  </section>
+
+      </div>
+
+      
+
+    </main>
+
+    
+      
+        
+        <script src="/js/dark-mode.min.0213e1773e6d1c5a644f847c67a6f8abac49a3776e2976f6008038af8c5b76a1.js"></script>
+      
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+  </body>
+
+</html>
